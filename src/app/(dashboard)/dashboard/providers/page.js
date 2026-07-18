@@ -423,16 +423,26 @@ export default function ProvidersPage() {
           </div>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-          {oauthEntries.map(([key, info]) => (
-            <ProviderCard
-              key={key}
-              providerId={key}
-              provider={info}
-              stats={getProviderStats(key, "oauth")}
-              authType="oauth"
-              onToggle={(active) => handleToggleProvider(key, "oauth", active)}
-            />
-          ))}
+          {oauthEntries.map(([key, info]) => {
+            // Providers that support both OAuth and API-key auth persist connections
+            // under either authType. Count both so the card total matches reality
+            // (codebuddy/codebuddy-cn/qwencloud store apikey rows even though the
+            // provider is listed under OAuth).
+            const modes = Array.isArray(info?.authModes) ? info.authModes : null;
+            const oauthAuthTypes = modes && modes.includes("apikey")
+              ? ["oauth", "apikey", "api_key"]
+              : "oauth";
+            return (
+              <ProviderCard
+                key={key}
+                providerId={key}
+                provider={info}
+                stats={getProviderStats(key, oauthAuthTypes)}
+                authType="oauth"
+                onToggle={(active) => handleToggleProvider(key, oauthAuthTypes, active)}
+              />
+            );
+          })}
         </div>
       </div>
       )}
