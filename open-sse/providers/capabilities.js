@@ -132,6 +132,42 @@ export const PROVIDER_CAPABILITIES = {
   // supportsImages). Every model reasons via OpenAI-style reasoning_effort
   // (see registry thinkingFormat). `onlyReasoning` models can't turn thinking
   // off → thinkingCanDisable:false (clamped to minimal instead of disabled).
+  // Qwen Cloud (dashscope-intl.aliyuncs.com compatible-mode) — OpenAI-compatible.
+  // Every model reasons via reasoning_effort (OpenAI shape). Without an explicit
+  // entry here, glm-* matches "*glm-5*" (thinkingFormat: zai) and deepseek-*
+  // matches "*deepseek-v4*" (thinkingFormat: deepseek), both wrong for this
+  // upstream. Force "openai" format so reasoning_effort passes through.
+  "qwencloud": {
+    "glm-5.2":         { reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 8192 },
+    "deepseek-v4-pro": { reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 8192 },
+    "qwen3.7-max":     { reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 8192 },
+  },
+
+  // CodeBuddy Global (www.codebuddy.ai) — OpenAI-compatible unified gateway.
+  // Every model reasons via reasoning_effort (OpenAI shape), including the
+  // Claude/GPT/Gemini/DeepSeek/GLM lines. Forcing thinkingFormat:"openai"
+  // stops the generic `*claude*` pattern from routing these through the
+  // claude-adaptive path (which would clamp xhigh → high in output_config.effort).
+  "codebuddy": {
+    "default-model":       { reasoning: true, thinkingFormat: "openai", contextWindow: 176000, maxOutput: 24000 },
+    "default-model-lite":  { reasoning: true, thinkingFormat: "openai", contextWindow: 176000, maxOutput: 24000 },
+    "claude-sonnet-4.6":   { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 176000, maxOutput: 24000 },
+    "claude-opus-4.7-1m":  { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 24000 },
+    "claude-opus-4.6":     { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 176000, maxOutput: 24000 },
+    "claude-haiku-4.5":    { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 176000, maxOutput: 24000 },
+    "gpt-5.5":             { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 72000 },
+    "gpt-5.4":             { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
+    "gpt-5.3-codex":       { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
+    "gpt-5.1-codex":       { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
+    "gemini-3.1-pro":      { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 400000, maxOutput: 64000 },
+    "gemini-3.0-flash":    { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 400000, maxOutput: 64000 },
+    "gemini-3.5-flash":    { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 65536 },
+    "gemini-2.5-flash":    { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 400000, maxOutput: 64000 },
+    "gemini-3.1-flash-lite": { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 200000, maxOutput: 65536 },
+    "gemini-2.5-pro":      { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 400000, maxOutput: 64000 },
+    "deepseek-v3-0324":    { reasoning: true, thinkingFormat: "openai", contextWindow: 128000, maxOutput: 8192 },
+    "glm-5.0":             { reasoning: true, thinkingFormat: "openai", contextWindow: 200000, maxOutput: 48000 },
+  },
   "codebuddy-cn": {
     "glm-5.2":            { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 48000 },
     "glm-5.1":            { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 200000, maxOutput: 48000 },

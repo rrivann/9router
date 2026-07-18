@@ -212,8 +212,19 @@ function stripAll(body) {
   if (body.request?.generationConfig) delete body.request.generationConfig.thinkingConfig;
 }
 
+// Providers whose OpenAI-compatible gateway accepts "max" as a valid
+// reasoning_effort value. Everyone else caps at "xhigh".
+const OPENAI_MAX_EFFORT_PROVIDERS = new Set(["codebuddy", "codebuddy-cn", "qwencloud"]);
+
+// Per-model exceptions: providers in OPENAI_MAX_EFFORT_PROVIDERS whose specific
+// models still cap at "xhigh" (upstream rejects "max" for that model).
+// Live-verified against DashScope-intl 2026-07-18 for qwencloud/qwen3.7-max.
+const OPENAI_MAX_MODEL_EXCEPTIONS = new Set([
+  "qwencloud:qwen3.7-max",
+]);
+
 // Apply unified thinking config to body in the resolved provider-native format.
-function applyFormat(fmt, body, cfg, caps) {
+function applyFormat(fmt, body, cfg, caps, provider = null, model = null) {
   const none = cfg.mode === "none";
   const canDisable = caps.thinkingCanDisable !== false;
   // Model cannot disable thinking → clamp "none" to minimal effort instead.
@@ -223,8 +234,19 @@ function applyFormat(fmt, body, cfg, caps) {
     case "openai": {
       if (none && canDisable) { body.reasoning_effort = "none"; break; }
       const level = toLevel(eff);
-      // OpenAI reasoning_effort enum caps at "xhigh" (no "max"); clamp Claude Code's "max".
-      if (level) body.reasoning_effort = level === "max" ? "xhigh" : level;
+      // OpenAI reasoning_effort enum caps at "xhigh" (no "max") for the public
+      // API. A few OpenAI-compatible upstreams (e.g. CodeBuddy Global) accept
+      // "max" — passthrough there, clamp for everyone else. Some models on those
+      // providers still cap at "xhigh" (see OPENAI_MAX_MODEL_EXCEPTIONS).
+      if (level) {
+        const providerAllowsMax = OPENAI_MAX_EFFORT_PROVIDERS.has(provider)
+          && !OPENAI_MAX_MODEL_EXCEPTIONS.has(`${provider}:${model}`);
+        if (level === "max" && !providerAllowsMax) {
+          body.reasoning_effort = "xhigh";
+        } else {
+          body.reasoning_effort = level;
+        }
+      }
       break;
     }
     case "claude-adaptive": {
@@ -330,6 +352,6 @@ export function applyThinking(targetFormat, model, body, provider = null, intent
 
   const fmt = resolveFormat(targetFormat, cleanModel, provider);
   stripAll(body);
-  applyFormat(fmt, body, cfg, caps);
+  applyFormat(fmt, body, cfg, caps, provider, cleanModel);
   return body;
 }
