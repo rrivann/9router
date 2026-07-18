@@ -79,6 +79,47 @@ export async function getSettings() {
   return mergeWithDefaults(raw);
 }
 
+// Nested maps that UI often PATCHes as a whole object after GET — deep-merge
+// per-key so concurrent tabs don't clobber each other's provider entries.
+const DEEP_MERGE_SETTING_KEYS = new Set([
+  "providerStrategies",
+  "providerThinking",
+  "contentFilters",
+  "comboStrategies",
+]);
+
+function deepMergeSettings(current, updates) {
+  const next = { ...current, ...updates };
+  for (const key of DEEP_MERGE_SETTING_KEYS) {
+    if (
+      updates[key] &&
+      typeof updates[key] === "object" &&
+      !Array.isArray(updates[key])
+    ) {
+      const base =
+        current[key] && typeof current[key] === "object" && !Array.isArray(current[key])
+          ? current[key]
+          : {};
+      // Per-provider key: null/undefined in update means "delete override".
+      // contentFilters also treats [] as clear (no filters for that provider).
+      const merged = { ...base };
+      for (const [k, v] of Object.entries(updates[key])) {
+        if (v === null || v === undefined) {
+          delete merged[k];
+        } else if (key === "contentFilters" && Array.isArray(v) && v.length === 0) {
+          delete merged[k];
+        } else if (v && typeof v === "object" && !Array.isArray(v) && base[k] && typeof base[k] === "object" && !Array.isArray(base[k])) {
+          merged[k] = { ...base[k], ...v };
+        } else {
+          merged[k] = v;
+        }
+      }
+      next[key] = merged;
+    }
+  }
+  return next;
+}
+
 // Atomic read-merge-write inside transaction (prevents losing concurrent updates)
 export async function updateSettings(updates) {
   const db = await getAdapter();
@@ -86,7 +127,7 @@ export async function updateSettings(updates) {
   db.transaction(() => {
     const row = db.get(`SELECT data FROM settings WHERE id = 1`);
     const current = row ? parseJson(row.data, {}) : {};
-    next = { ...current, ...updates };
+    next = deepMergeSettings(current, updates);
     db.run(
       `INSERT INTO settings(id, data) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data`,
       [stringifyJson(next)]
