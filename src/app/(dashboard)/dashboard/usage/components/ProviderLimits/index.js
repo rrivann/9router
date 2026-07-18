@@ -1069,6 +1069,52 @@ export default function ProviderLimits() {
                           {getConnectionSecondaryLabel(conn)}
                         </p>
                       ) : null}
+                      {conn.apiKey && (() => {
+                        const masked = conn.apiKey.length <= 8
+                          ? `${conn.apiKey.slice(0, 2)}••`
+                          : `${conn.apiKey.slice(0, 4)}${"•".repeat(Math.min(conn.apiKey.length - 8, 20))}${conn.apiKey.slice(-4)}`;
+                        return (
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const btn = e.currentTarget;
+                              const labelEl = btn.querySelector("[data-key-label]");
+                              const originalText = labelEl?.textContent || "";
+                              const showFeedback = (text, colorClass) => {
+                                if (labelEl) labelEl.textContent = text;
+                                btn.classList.remove("text-green-500", "text-red-500");
+                                if (colorClass) btn.classList.add(colorClass);
+                              };
+                              const reset = () => setTimeout(() => showFeedback(originalText, null), 2000);
+                              try {
+                                if (navigator?.clipboard?.writeText) {
+                                  await navigator.clipboard.writeText(conn.apiKey);
+                                } else {
+                                  const ta = document.createElement("textarea");
+                                  ta.value = conn.apiKey;
+                                  ta.style.position = "fixed";
+                                  ta.style.opacity = "0";
+                                  document.body.appendChild(ta);
+                                  ta.select();
+                                  document.execCommand("copy");
+                                  document.body.removeChild(ta);
+                                }
+                                showFeedback("Copied!", "text-green-500");
+                                reset();
+                              } catch {
+                                showFeedback("Copy failed", "text-red-500");
+                                reset();
+                              }
+                            }}
+                            title="Click to copy full API key"
+                            className="mt-0.5 inline-flex max-w-full items-center gap-1 text-[11px] text-text-muted/70 transition-colors hover:text-primary"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">key</span>
+                            <code data-key-label className="truncate font-mono">{masked}</code>
+                          </button>
+                        );
+                      })()}
                       {conn.provider === "kiro" && (
                         <div className="mt-1 flex flex-wrap items-center gap-1">
                           <span className="rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-semibold text-brand-600 dark:text-brand-300">
