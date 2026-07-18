@@ -1,9 +1,18 @@
 {
-  "name": "9router",
-  "version": "0.5.35",
-  "description": "9Router CLI - Start and manage 9Router server",
+  "name": "9router-gacor",
+  "version": "0.5.36",
+  "description": "9router-gacor — FREE AI Router & Token Saver. Route Claude Code / Cursor / Codex / Cline / Copilot to 3 aggregator providers (CodeBuddy, CodeBuddy CN, Qwen Cloud) with auto-fallback, quota tracker, and 20-40% token savings.",
   "bin": {
-    "9router": "./cli.js"
+    "9router-gacor": "./cli.js"
+  },
+  "author": "lukeskyy7",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rrivann/9router.git"
+  },
+  "homepage": "https://github.com/rrivann/9router#readme",
+  "bugs": {
+    "url": "https://github.com/rrivann/9router/issues"
   },
   "files": [
     "cli.js",
