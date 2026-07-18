@@ -4,12 +4,12 @@ import {
   applyFiltersToMessages,
 } from "../utils/contentFilters.js";
 
-const filters = createContentFilterCache("codebuddy-cn");
+const filters = createContentFilterCache("qwencloud");
 export const invalidateContentFiltersCache = filters.invalidate;
 
-export class CodeBuddyExecutor extends DefaultExecutor {
+export class QwenCloudExecutor extends DefaultExecutor {
   constructor() {
-    super("codebuddy-cn");
+    super("qwencloud");
   }
 
   async execute(params) {
@@ -19,22 +19,17 @@ export class CodeBuddyExecutor extends DefaultExecutor {
 
   transformRequest(model, body, stream, credentials) {
     const transformed = super.transformRequest(model, body, stream, credentials);
-    transformed.stream = true;
-
-    const eff = transformed.reasoning_effort;
-    if (eff === "none" || eff === "off") {
-      delete transformed.reasoning_effort;
-    } else if (eff) {
-      transformed.reasoning_summary = "auto";
+    if (Array.isArray(transformed.messages)) {
+      transformed.messages = transformed.messages.filter(
+        (msg) => msg && typeof msg === "object" && !["system", "developer"].includes(msg.role)
+      );
     }
-
     const rules = this._contentFilters || [];
     if (rules.length > 0 && Array.isArray(transformed.messages)) {
       transformed.messages = applyFiltersToMessages(transformed.messages, rules);
     }
-
     return transformed;
   }
 }
 
-export default CodeBuddyExecutor;
+export default QwenCloudExecutor;
