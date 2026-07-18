@@ -92,6 +92,7 @@ const OAUTH_TEST_CONFIG = {
     authPrefix: "Bearer ",
   },
   "codebuddy-cn": { tokenExists: true },
+  codebuddy: { tokenExists: true },
   kimchi: {
     url: KIMCHI_CONFIG.validationUrl || "https://api.cast.ai/v1/llm/openai/supported-providers",
     method: "GET",
@@ -779,6 +780,69 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         const res = await fetchWithConnectionProxy(`${baseUrl}/models`, {
           headers: { Authorization: `Bearer ${connection.apiKey}` },
         }, effectiveProxy);
+        return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
+      }
+      case "codebuddy-cn": {
+        // Zero-credit probe — hit the usage/billing endpoint the dashboard
+        // polls. It only reads billing metadata; no chat, no quota deduction.
+        // 401/403 = bad key; 5xx = treat as invalid; anything else = accepted.
+        const url = PROVIDERS["codebuddy-cn"]?.usage?.url
+          || "https://copilot.tencent.com/v2/billing/meter/get-user-resource";
+        const res = await fetchWithConnectionProxy(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${connection.apiKey}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "CLI/2.108.1 CodeBuddy/2.108.1",
+            "X-Product": "SaaS",
+            "X-IDE-Type": "CLI",
+            "X-IDE-Name": "CLI",
+            "x-requested-with": "XMLHttpRequest",
+            "x-codebuddy-request": "1",
+          },
+          body: "{}",
+        }, effectiveProxy);
+        const valid = res.status !== 401 && res.status !== 403 && res.status < 500;
+        return { valid, error: valid ? null : `Invalid API key (HTTP ${res.status})` };
+      }
+      case "codebuddy": {
+        // CodeBuddy Global rejects /v2/plugin/accounts without a full CLI
+        // session context (per-key 401). Fall back to a minimal chat probe:
+        // max_tokens:1 + a tiny "hi" prompt. Consumes ~1 unit of quota per
+        // test, but this is the only endpoint the account gateway accepts.
+        const domain = connection.providerSpecificData?.domain || "www.codebuddy.ai";
+        const res = await fetchWithConnectionProxy(`https://${domain}/v2/chat/completions`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${connection.apiKey}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "CLI/2.105.2 CodeBuddy/2.105.2",
+            "X-Product": "SaaS",
+            "X-IDE-Type": "CLI",
+            "X-IDE-Name": "CLI",
+            "x-requested-with": "XMLHttpRequest",
+            "x-codebuddy-request": "1",
+            "X-Domain": domain,
+          },
+          body: JSON.stringify({
+            model: "default-model-lite",
+            messages: [{ role: "user", content: "hi" }],
+            max_tokens: 1,
+            stream: false,
+          }),
+        }, effectiveProxy);
+        const valid = res.status !== 401 && res.status !== 403;
+        return { valid, error: valid ? null : `Invalid API key (HTTP ${res.status})` };
+      }
+      case "qwencloud": {
+        // DashScope-intl compatible-mode exposes /v1/models under the /compatible-mode root.
+        const res = await fetchWithConnectionProxy(
+          "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models",
+          { headers: { Authorization: `Bearer ${connection.apiKey}` } },
+          effectiveProxy,
+        );
         return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
       }
       default:
