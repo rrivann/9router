@@ -223,6 +223,17 @@ const OPENAI_MAX_MODEL_EXCEPTIONS = new Set([
   "qwencloud:qwen3.7-max",
 ]);
 
+// Per-user override (2026-07-19): specific provider+model pairs where a
+// client-provided reasoning_effort:"medium" is silently upgraded to "max".
+// Rationale: default CLI clients (e.g. Claude Code) send "medium"; we want the
+// highest reasoning budget on this exact upstream without asking users to add a
+// model suffix. Only "medium" is rewritten — none/low/high/xhigh pass through
+// so explicit intent is preserved. Provider must also allow "max" (i.e. be in
+// OPENAI_MAX_EFFORT_PROVIDERS and not in OPENAI_MAX_MODEL_EXCEPTIONS).
+const OPENAI_MEDIUM_TO_MAX_UPGRADES = new Set([
+  "codebuddy:claude-opus-4.7-1m",
+]);
+
 // Apply unified thinking config to body in the resolved provider-native format.
 function applyFormat(fmt, body, cfg, caps, provider = null, model = null) {
   const none = cfg.mode === "none";
@@ -233,7 +244,7 @@ function applyFormat(fmt, body, cfg, caps, provider = null, model = null) {
   switch (fmt) {
     case "openai": {
       if (none && canDisable) { body.reasoning_effort = "none"; break; }
-      const level = toLevel(eff);
+      let level = toLevel(eff);
       // OpenAI reasoning_effort enum caps at "xhigh" (no "max") for the public
       // API. A few OpenAI-compatible upstreams (e.g. CodeBuddy Global) accept
       // "max" — passthrough there, clamp for everyone else. Some models on those
@@ -241,6 +252,16 @@ function applyFormat(fmt, body, cfg, caps, provider = null, model = null) {
       if (level) {
         const providerAllowsMax = OPENAI_MAX_EFFORT_PROVIDERS.has(provider)
           && !OPENAI_MAX_MODEL_EXCEPTIONS.has(`${provider}:${model}`);
+        // Targeted upgrade: on specific provider+model pairs, silently promote
+        // "medium" → "max" so default CLI clients get max reasoning without
+        // needing a model suffix. Other levels pass through unchanged.
+        if (
+          level === "medium"
+          && providerAllowsMax
+          && OPENAI_MEDIUM_TO_MAX_UPGRADES.has(`${provider}:${model}`)
+        ) {
+          level = "max";
+        }
         if (level === "max" && !providerAllowsMax) {
           body.reasoning_effort = "xhigh";
         } else {
