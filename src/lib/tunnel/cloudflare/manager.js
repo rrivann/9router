@@ -1,7 +1,7 @@
 import { loadState, saveState, generateShortId } from "../shared/state.js";
 import { spawnQuickTunnel, killCloudflared, isCloudflaredRunning, setUnexpectedExitHandler } from "./cloudflared.js";
 import { clearPid } from "./pid.js";
-import { waitForHealth, probeUrlAlive } from "./healthCheck.js";
+import { probeUrlAlive } from "./healthCheck.js";
 import { WORKER_URL } from "./config.js";
 import { getSettings, updateSettings } from "@/lib/localDb";
 
@@ -87,15 +87,18 @@ export async function enableTunnel(localPort = 20128) {
     await updateSettings({ tunnelEnabled: true, tunnelUrl });
     console.log(`[Tunnel] registered shortId=${shortId} publicUrl=${publicUrl}`);
 
-    // Verify publicUrl first (worker route is reliable; direct *.trycloudflare.com DNS may lag)
-    await waitForHealth(publicUrl, token);
-    console.log("[Tunnel] public URL healthy");
-    // Direct tunnel probe is best-effort: DNS for *.trycloudflare.com can be slow/blocked
-    if (!(await probeUrlAlive(tunnelUrl))) {
-      console.warn("[Tunnel] direct URL not reachable yet, continuing via publicUrl");
-    } else {
-      console.log("[Tunnel] direct URL healthy");
-    }
+    // Health check disabled per user request (2026-07-19). cloudflared prints
+    // the URL after it has already established the tunnel to Cloudflare's edge,
+    // and the worker registration above succeeds only when the DO route is up.
+    // The extra HTTP probe against /api/health via publicUrl/tunnelUrl was
+    // failing on slow networks / restricted DNS (60s timeout) and killing an
+    // otherwise-healthy tunnel. Best-effort probes below only log, never throw.
+    probeUrlAlive(publicUrl).then((ok) => {
+      console.log(`[Tunnel] public URL probe: ${ok ? "healthy" : "not yet reachable (best-effort, ignored)"}`);
+    }).catch(() => {});
+    probeUrlAlive(tunnelUrl).then((ok) => {
+      console.log(`[Tunnel] direct URL probe: ${ok ? "healthy" : "not yet reachable (best-effort, ignored)"}`);
+    }).catch(() => {});
 
     console.log("[Tunnel] enable success");
     return { success: true, tunnelUrl, shortId, publicUrl };
