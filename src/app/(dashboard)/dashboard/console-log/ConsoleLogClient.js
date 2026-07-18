@@ -13,6 +13,14 @@ const LOG_LEVEL_COLORS = {
 };
 
 function colorLine(line) {
+  // Request-line symbols take priority over the [LEVEL] tag colouring:
+  //   ▶  request start (POST 9router → provider/...) — highlight yellow so the
+  //      user's eye immediately spots each new inbound request.
+  //   📊 request end   (DONE ...ms · TTFT ... · IN ... · OUT ...) — highlight
+  //      blue so the paired end line is easy to scan alongside its start.
+  if (line.includes("▶")) return <span className="text-yellow-400">{line}</span>;
+  if (line.includes("📊")) return <span className="text-blue-400">{line}</span>;
+
   const match = line.match(/\[(\w+)\]/g);
   const levelTag = match ? match[1]?.replace(/\[|\]/g, "") : null;
   const color = LOG_LEVEL_COLORS[levelTag] || "text-green-400";
