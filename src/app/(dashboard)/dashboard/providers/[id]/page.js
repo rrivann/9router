@@ -64,6 +64,7 @@ export default function ProviderDetailPage() {
   const [providerStrategy, setProviderStrategy] = useState(null);
   const [providerStickyLimit, setProviderStickyLimit] = useState("");
   const [thinkingMode, setThinkingMode] = useState("auto");
+  const [contentFilters, setContentFilters] = useState([]);
   const [autoPing, setAutoPing] = useState({ enabled: false, connections: {} });
   const [suggestedModels, setSuggestedModels] = useState([]);
   const [kiloFreeModels, setKiloFreeModels] = useState([]);
@@ -306,6 +307,8 @@ export default function ProviderDetailPage() {
       // Load per-provider thinking config
       const thinkingCfg = (settingsData.providerThinking || {})[providerId] || {};
       setThinkingMode(thinkingCfg.mode || "auto");
+      const cfCfg = (settingsData.contentFilters || {})[providerId] || [];
+      setContentFilters(Array.isArray(cfCfg) ? cfCfg : []);
       const autoPingSettingsKey = AUTO_PING_SETTINGS_KEYS[providerId];
       const apCfg = autoPingSettingsKey ? settingsData[autoPingSettingsKey] || {} : {};
       setAutoPing({ enabled: apCfg.enabled === true, connections: apCfg.connections || {} });
@@ -413,6 +416,26 @@ export default function ProviderDetailPage() {
       });
     } catch (error) {
       console.log("Error saving thinking config:", error);
+    }
+  };
+
+  const saveContentFilters = async (filters) => {
+    try {
+      // Send providerId: null to clear — settingsRepo deepMergeSettings deletes
+      // the key when the value is null / empty array. Otherwise the deep-merge
+      // in updateSettings keeps the previous filter list.
+      const patch = {
+        contentFilters: {
+          [providerId]: (!filters || filters.length === 0) ? null : filters,
+        },
+      };
+      await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+    } catch (error) {
+      console.log("Error saving content filters:", error);
     }
   };
 
@@ -573,11 +596,18 @@ export default function ProviderDetailPage() {
     }
   };
 
-  const handleRunOneByOneTest = async () => {
-    if (oneByOneRunning || connections.length === 0) return;
+  const handleRunOneByOneTest = async (selectedOnly = false) => {
+    if (oneByOneRunning) return;
+    // With no explicit selection → test every connection. With a selection →
+    // only test the ticked rows. Falls back to all connections if the caller
+    // asked for "selected" but nothing is currently selected.
+    const targets = selectedOnly && selectedConnectionIds.length > 0
+      ? connections.filter((c) => selectedConnectionIds.includes(c.id))
+      : connections;
+    if (targets.length === 0) return;
 
     const queuedState = Object.fromEntries(
-      connections.map((connection) => [connection.id, { state: "queued", error: null }]),
+      targets.map((connection) => [connection.id, { state: "queued", error: null }]),
     );
 
     stopOneByOneRef.current = false;
@@ -585,16 +615,16 @@ export default function ProviderDetailPage() {
     setOneByOneStopping(false);
     setOneByOneCurrentConnectionId(null);
     setOneByOneResults(queuedState);
-    setOneByOneSummary({ total: connections.length, completed: 0, passed: 0, failed: 0, stopped: false });
+    setOneByOneSummary({ total: targets.length, completed: 0, passed: 0, failed: 0, stopped: false });
 
     let passed = 0;
     let failed = 0;
 
     try {
-      for (let index = 0; index < connections.length; index += 1) {
+      for (let index = 0; index < targets.length; index += 1) {
         if (stopOneByOneRef.current) {
           setOneByOneSummary({
-            total: connections.length,
+            total: targets.length,
             completed: index,
             passed,
             failed,
@@ -603,7 +633,7 @@ export default function ProviderDetailPage() {
           break;
         }
 
-        const connection = connections[index];
+        const connection = targets[index];
         setOneByOneCurrentConnectionId(connection.id);
         setOneByOneResults((prev) => ({
           ...prev,
@@ -640,14 +670,14 @@ export default function ProviderDetailPage() {
         }
 
         setOneByOneSummary({
-          total: connections.length,
+          total: targets.length,
           completed: index + 1,
           passed,
           failed,
           stopped: false,
         });
 
-        if (index < connections.length - 1) {
+        if (index < targets.length - 1) {
           await sleep(ONE_BY_ONE_DELAY_MS);
         }
       }
@@ -707,6 +737,102 @@ export default function ProviderDetailPage() {
         if (failed > 0) alert(`Deleted ${idsToDelete.length - failed} connection(s), ${failed} failed.`);
       }
     });
+  };
+
+  // Bulk enable/disable selected connections (reuses the same isActive PUT as the row toggle).
+  const handleBulkSetActive = async (isActive) => {
+    const ids = selectedConnectionIds.filter((id) => {
+      const conn = connections.find((c) => c.id === id);
+      if (!conn) return false;
+      // Skip ones already in the desired state
+      return (conn.isActive !== false) !== isActive;
+    });
+    if (ids.length === 0) {
+      // Nothing to change — still clear selection so the action feels done
+      setSelectedConnectionIds([]);
+      return;
+    }
+    let failed = 0;
+    const okIds = [];
+    for (const id of ids) {
+      try {
+        const res = await fetch(`/api/providers/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive }),
+        });
+        if (res.ok) okIds.push(id);
+        else failed += 1;
+      } catch (error) {
+        console.log("Error bulk-updating connection status:", error);
+        failed += 1;
+      }
+    }
+    if (okIds.length > 0) {
+      setConnections((prev) =>
+        prev.map((c) => (okIds.includes(c.id) ? { ...c, isActive } : c))
+      );
+    }
+    setSelectedConnectionIds([]);
+    if (failed > 0) {
+      alert(
+        `${isActive ? "Enabled" : "Disabled"} ${okIds.length} connection(s), ${failed} failed.`
+      );
+    }
+  };
+
+  const handleBulkEnable = () => handleBulkSetActive(true);
+  const handleBulkDisable = () => handleBulkSetActive(false);
+
+  // Detect connections that OAuth-refresh has already given up on
+  // (revoked refresh_token, invalid_grant, etc). Mirrors the keyword list
+  // used by ConnectionRow.js.
+  const isRevokedConn = (c) => {
+    if (!c?.lastError) return false;
+    const s = String(c.lastError).toLowerCase();
+    return (
+      s.includes("invalid_grant") ||
+      s.includes("unrecoverable_refresh_error") ||
+      s.includes("token revoked") ||
+      s.includes("relogin required") ||
+      s.includes("relogin failed") ||
+      s.includes("refresh token has been revoked")
+    );
+  };
+
+  // One-click cleanup: soft-disable every account 9router has already
+  // classified as revoked. Reversible — user can filter "disabled" and
+  // toggle back on if the upstream provider restores the account.
+  const handleCleanupRevoked = async () => {
+    const revoked = connections.filter((c) => isRevokedConn(c) && c.isActive !== false);
+    if (revoked.length === 0) return;
+    if (!window.confirm(`Disable ${revoked.length} revoked account(s)? Reversible via the toggle on each row.`)) {
+      return;
+    }
+    let failed = 0;
+    const okIds = [];
+    for (const c of revoked) {
+      try {
+        const res = await fetch(`/api/providers/${c.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: false }),
+        });
+        if (res.ok) okIds.push(c.id);
+        else failed += 1;
+      } catch (error) {
+        console.log("Error cleanup revoked:", error);
+        failed += 1;
+      }
+    }
+    if (okIds.length > 0) {
+      setConnections((prev) =>
+        prev.map((c) => (okIds.includes(c.id) ? { ...c, isActive: false } : c))
+      );
+    }
+    if (failed > 0) {
+      alert(`Disabled ${okIds.length} revoked account(s), ${failed} failed.`);
+    }
   };
 
   const handleOAuthSuccess = () => {
@@ -823,6 +949,58 @@ export default function ProviderDetailPage() {
     setSelectedConnectionIds(connections.map((conn) => conn.id));
   };
 
+  const toggleSelectAllErrors = () => {
+    const errorIds = connections
+      .filter((conn) => conn.testStatus === "error" || conn.testStatus === "unavailable")
+      .map((conn) => conn.id);
+    const allErrorsSelected = errorIds.length > 0 && errorIds.every((id) => selectedConnectionIds.includes(id));
+    if (allErrorsSelected) {
+      setSelectedConnectionIds((prev) => prev.filter((id) => !errorIds.includes(id)));
+    } else {
+      setSelectedConnectionIds((prev) => [...new Set([...prev, ...errorIds])]);
+    }
+  };
+
+  const errorConnectionCount = connections.filter(
+    (conn) => conn.testStatus === "error" || conn.testStatus === "unavailable"
+  ).length;
+
+  const toggleSelectAllUnknown = () => {
+    const unknownIds = connections
+      .filter((conn) => !conn.testStatus || conn.testStatus === "unknown")
+      .map((conn) => conn.id);
+    const allUnknownSelected = unknownIds.length > 0 && unknownIds.every((id) => selectedConnectionIds.includes(id));
+    if (allUnknownSelected) {
+      setSelectedConnectionIds((prev) => prev.filter((id) => !unknownIds.includes(id)));
+    } else {
+      setSelectedConnectionIds((prev) => [...new Set([...prev, ...unknownIds])]);
+    }
+  };
+
+  const unknownConnectionCount = connections.filter(
+    (conn) => !conn.testStatus || conn.testStatus === "unknown"
+  ).length;
+
+  const toggleSelectAllDisabled = () => {
+    const disabledIds = connections
+      .filter((conn) => conn.isActive === false)
+      .map((conn) => conn.id);
+    const allDisabledSelected = disabledIds.length > 0 && disabledIds.every((id) => selectedConnectionIds.includes(id));
+    if (allDisabledSelected) {
+      setSelectedConnectionIds((prev) => prev.filter((id) => !disabledIds.includes(id)));
+    } else {
+      setSelectedConnectionIds((prev) => [...new Set([...prev, ...disabledIds])]);
+    }
+  };
+
+  const disabledConnectionCount = connections.filter(
+    (conn) => conn.isActive === false
+  ).length;
+
+  const revokedConnections = connections.filter(
+    (c) => isRevokedConn(c) && c.isActive !== false
+  );
+
   const clearSelection = () => {
     setSelectedConnectionIds([]);
     setBulkProxyPoolId("__none__");
@@ -881,8 +1059,29 @@ export default function ProviderDetailPage() {
     }
   };
 
+  // Apply proxy target selection:
+  //   - If user manually checked rows → target those rows (regardless of proxy state).
+  //   - Otherwise → target only connections WITHOUT a proxy binding.
+  //     Previously this defaulted to ALL connections (e.g. "Apply Proxy (1056)"),
+  //     which would overwrite already-bound accounts. Now unbound-only is the
+  //     safe default; use Select-All if you want to re-bind everyone.
+  const unassignedConnections = connections.filter(
+    (conn) => {
+      const pid = conn.providerSpecificData?.proxyPoolId;
+      return !pid || pid === "__none__";
+    }
+  );
+  const proxyTargetConnections =
+    selectedConnectionIds.length > 0 ? selectedConnections : unassignedConnections;
+  const proxyTargetMode =
+    selectedConnectionIds.length > 0 ? "selected" : "unassigned";
+
   const handleApplySinglePool = (proxyPoolId) => {
-    const targets = connections.map((c) => ({ connectionId: c.id, proxyPoolId }));
+    if (proxyTargetConnections.length === 0) {
+      alert("No connections to update.");
+      return;
+    }
+    const targets = proxyTargetConnections.map((c) => ({ connectionId: c.id, proxyPoolId }));
     return applyProxyAssignments(targets);
   };
 
@@ -892,7 +1091,11 @@ export default function ProviderDetailPage() {
       alert("No active proxy pools available.");
       return;
     }
-    const targets = connections.map((c, i) => ({
+    if (proxyTargetConnections.length === 0) {
+      alert("No connections to update.");
+      return;
+    }
+    const targets = proxyTargetConnections.map((c, i) => ({
       connectionId: c.id,
       proxyPoolId: activePools[i % activePools.length].id,
     }));
@@ -967,9 +1170,25 @@ export default function ProviderDetailPage() {
     <Modal
       isOpen={showBulkProxyModal}
       onClose={closeBulkProxyModal}
-      title={`Apply Proxy (${connections.length} connections)`}
+      title={`Apply Proxy (${proxyTargetConnections.length} connection${proxyTargetConnections.length === 1 ? "" : "s"} ${proxyTargetMode === "selected" ? "selected" : "unassigned"})`}
     >
       <div className="flex flex-col gap-3">
+        <div className="rounded-md border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] px-3 py-2 text-xs text-text-muted">
+          {proxyTargetMode === "selected" ? (
+            <>
+              Applies to <b>{proxyTargetConnections.length}</b> currently selected
+              connection{proxyTargetConnections.length === 1 ? "" : "s"} — will
+              overwrite existing proxy bindings.
+            </>
+          ) : (
+            <>
+              Applies to <b>{proxyTargetConnections.length}</b> connection
+              {proxyTargetConnections.length === 1 ? "" : "s"} that currently have
+              no proxy assigned. Already-bound accounts are skipped. To re-bind
+              them, tick their rows first.
+            </>
+          )}
+        </div>
         <div className="flex flex-col">
           <button
             onClick={handleApplyOneToOne}
@@ -1381,33 +1600,93 @@ export default function ProviderDetailPage() {
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-semibold">Connections</h2>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-              {connections.length > 0 && proxyPools.length > 0 && (
+              {connections.length > 0 && proxyPools.length > 0 && (() => {
+                // Button shows: how many rows the action would touch by default.
+                // - With a selection: "Apply Proxy (N selected)"
+                // - Without: "Apply Proxy (N unassigned)"; disabled when N === 0
+                //   so the user can't accidentally mass-rebind everyone.
+                const count = proxyTargetConnections.length;
+                const label =
+                  proxyTargetMode === "selected"
+                    ? `Apply Proxy (${count} selected)`
+                    : `Apply Proxy (${count} unassigned)`;
+                const disabled = count === 0;
+                const title = disabled
+                  ? "All connections already have a proxy. Select rows manually to override."
+                  : proxyTargetMode === "selected"
+                    ? "Apply a proxy to the currently selected rows"
+                    : "Apply a proxy to connections that don't have one yet";
+                return (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon="lan"
+                    onClick={() => setShowBulkProxyModal(true)}
+                    disabled={disabled}
+                    title={title}
+                  >
+                    {label}
+                  </Button>
+                );
+              })()}
+              {revokedConnections.length > 0 && (
                 <Button
                   size="sm"
                   variant="secondary"
-                  icon="lan"
-                  onClick={() => setShowBulkProxyModal(true)}
+                  icon="cleaning_services"
+                  onClick={handleCleanupRevoked}
                 >
-                  Apply Proxy
+                  Cleanup Revoked ({revokedConnections.length})
                 </Button>
               )}
               {connections.length > 0 && (
                 <>
                   {selectedConnectionIds.length > 0 && (
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      icon="delete"
-                      onClick={handleBulkDelete}
-                    >
-                      Delete Selected ({selectedConnectionIds.length})
-                    </Button>
+                    <>
+                      {selectedConnections.some((c) => c.isActive === false) && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon="toggle_on"
+                          onClick={handleBulkEnable}
+                        >
+                          Enable Selected ({selectedConnections.filter((c) => c.isActive === false).length})
+                        </Button>
+                      )}
+                      {selectedConnections.some((c) => c.isActive !== false) && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon="toggle_off"
+                          onClick={handleBulkDisable}
+                        >
+                          Disable Selected ({selectedConnections.filter((c) => c.isActive !== false).length})
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        icon="delete"
+                        onClick={handleBulkDelete}
+                      >
+                        Delete Selected ({selectedConnectionIds.length})
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        icon="science"
+                        onClick={() => handleRunOneByOneTest(true)}
+                        disabled={oneByOneRunning}
+                      >
+                        {oneByOneRunning ? "Testing..." : `Test Selected (${selectedConnectionIds.length})`}
+                      </Button>
+                    </>
                   )}
                   <Button
                     size="sm"
                     variant="secondary"
                     icon="sync"
-                    onClick={handleRunOneByOneTest}
+                    onClick={() => handleRunOneByOneTest(false)}
                     disabled={oneByOneRunning}
                   >
                     {oneByOneRunning ? "Testing Connection One-by-One..." : "Test Connection One-by-One"}
@@ -1516,7 +1795,7 @@ export default function ProviderDetailPage() {
                 </div>
               )}
               {connections.length > 0 && (
-                <div className="mb-3 flex items-center gap-2 border-b border-black/[0.03] pb-2 dark:border-white/[0.03]">
+                <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-black/[0.03] pb-2 dark:border-white/[0.03]">
                   <label className="flex cursor-pointer items-center gap-1.5 text-xs text-text-muted hover:text-primary">
                     <input
                       type="checkbox"
@@ -1526,6 +1805,33 @@ export default function ProviderDetailPage() {
                     />
                     Select All
                   </label>
+                  {errorConnectionCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={toggleSelectAllErrors}
+                      className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-600 hover:bg-red-500/20 dark:text-red-400"
+                    >
+                      Select All Error ({errorConnectionCount})
+                    </button>
+                  )}
+                  {unknownConnectionCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={toggleSelectAllUnknown}
+                      className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 hover:bg-amber-500/20 dark:text-amber-400"
+                    >
+                      Select All Unknown ({unknownConnectionCount})
+                    </button>
+                  )}
+                  {disabledConnectionCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={toggleSelectAllDisabled}
+                      className="rounded-md border border-gray-500/30 bg-gray-500/10 px-2 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-500/20 dark:text-gray-400"
+                    >
+                      Select All Disabled ({disabledConnectionCount})
+                    </button>
+                  )}
                 </div>
               )}
               {connectionsList}
@@ -1639,6 +1945,154 @@ export default function ProviderDetailPage() {
         )}
         {renderModelsSection()}
       </Card>
+
+      {(providerId === "codebuddy-cn" || providerId === "codebuddy" || providerId === "qwencloud") && (
+        <Card>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Content Filters</h2>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                icon="download"
+                disabled={contentFilters.length === 0}
+                onClick={() => {
+                  const data = {
+                    filters: contentFilters,
+                    providerScope: [providerId],
+                    enabled: true,
+                    exportedAt: new Date().toISOString(),
+                  };
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "content-filters.json";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                Download
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon="upload"
+                onClick={() => {
+                  const input = document.createElement("input");
+                  input.type = "file";
+                  input.accept = ".json";
+                  input.onchange = async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const text = await file.text();
+                      const parsed = JSON.parse(text);
+                      const rawFilters = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.filters) ? parsed.filters : []);
+                      const next = rawFilters
+                        .filter((f) => f && typeof f.pattern === "string")
+                        .map((f) => ({
+                          pattern: f.pattern,
+                          replacement: f.replacement || "",
+                          enabled: f.enabled !== false,
+                        }));
+                      setContentFilters(next);
+                      saveContentFilters(next);
+                    } catch {}
+                  };
+                  input.click();
+                }}
+              >
+                Upload
+              </Button>
+              <Button
+                size="sm"
+                icon="add"
+                onClick={() => {
+                  const next = [...contentFilters, { pattern: "", replacement: "", enabled: true }];
+                  setContentFilters(next);
+                  saveContentFilters(next);
+                }}
+              >
+                Add Filter
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-text-muted mb-3">
+            Regex pattern + replacement untuk rewrite/remove konten request sebelum dikirim ke upstream. Replacement kosong = remove.
+          </p>
+          {contentFilters.length === 0 ? (
+            <p className="text-sm text-text-muted py-4 text-center">No content filters configured</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {contentFilters.map((filter, idx) => (
+                <div key={idx} className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-start">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Pattern (regex), e.g. \\bsecret\\w+\\b"
+                        value={filter.pattern}
+                        onChange={(e) => {
+                          const next = contentFilters.map((f, i) => i === idx ? { ...f, pattern: e.target.value } : f);
+                          setContentFilters(next);
+                        }}
+                        onBlur={(e) => {
+                          const next = contentFilters.map((f, i) =>
+                            i === idx ? { ...f, pattern: e.target.value } : f
+                          );
+                          setContentFilters(next);
+                          saveContentFilters(next);
+                        }}
+                        className="flex-1 px-2 py-1 text-xs font-mono border border-border rounded bg-background focus:outline-none focus:border-primary"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Replacement (kosong = remove)"
+                      value={filter.replacement || ""}
+                      onChange={(e) => {
+                        const next = contentFilters.map((f, i) => i === idx ? { ...f, replacement: e.target.value } : f);
+                        setContentFilters(next);
+                      }}
+                      onBlur={(e) => {
+                        const next = contentFilters.map((f, i) =>
+                          i === idx ? { ...f, replacement: e.target.value } : f
+                        );
+                        setContentFilters(next);
+                        saveContentFilters(next);
+                      }}
+                      className="px-2 py-1 text-xs font-mono border border-border rounded bg-background focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 sm:flex-col">
+                    <Toggle
+                      size="sm"
+                      checked={filter.enabled !== false}
+                      onChange={(on) => {
+                        const next = contentFilters.map((f, i) => i === idx ? { ...f, enabled: on } : f);
+                        setContentFilters(next);
+                        saveContentFilters(next);
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        const next = contentFilters.filter((_, i) => i !== idx);
+                        setContentFilters(next);
+                        saveContentFilters(next);
+                      }}
+                      className="rounded p-1 text-text-muted hover:bg-red-500/10 hover:text-red-500"
+                      title="Delete filter"
+                    >
+                      <span className="material-symbols-outlined text-sm">delete</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       {bulkActionModal}
 
