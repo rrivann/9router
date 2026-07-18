@@ -8,7 +8,53 @@ import {
   isValidApiKey,
 } from "../services/auth.js";
 import { cacheClaudeHeaders } from "open-sse/utils/claudeHeaderCache.js";
-import { getSettings } from "@/lib/localDb";
+import { getSettings, updateProviderConnection, deleteProviderConnection } from "@/lib/localDb";
+
+// Handle upstream 403 "Access denied" (IP/anti-abuse — refresh doesn't help).
+// Default action: DELETE the connection permanently after N occurrences.
+// Threshold default 1 (immediate); action default "delete".
+// Env overrides:
+//   GROK_ACCESS_DENIED_THRESHOLD=1          # occurrences required
+//   GROK_ACCESS_DENIED_ACTION=delete|disable|error   # what to do
+const ACCESS_DENIED_DISABLE_THRESHOLD = Math.max(
+  1,
+  parseInt(process.env.GROK_ACCESS_DENIED_THRESHOLD || "1", 10) || 1
+);
+const ACCESS_DENIED_ACTION = (() => {
+  const raw = String(process.env.GROK_ACCESS_DENIED_ACTION || "delete").toLowerCase();
+  return raw === "disable" || raw === "error" ? raw : "delete";
+})();
+const accessDeniedTracker = (() => {
+  // connectionId → { count, timestamp } — records how many times each account
+  // has hit an "access denied" error inside the TTL window.
+  const entries = new Map();
+  const TTL_MS = 10 * 60 * 1000;
+  return {
+    record(id) {
+      if (!id) return;
+      const now = Date.now();
+      const prev = entries.get(id);
+      if (!prev || now - prev.timestamp > TTL_MS) {
+        entries.set(id, { count: 1, timestamp: now });
+      } else {
+        entries.set(id, { count: prev.count + 1, timestamp: now });
+      }
+    },
+    count(id) {
+      if (!id) return 0;
+      const prev = entries.get(id);
+      if (!prev) return 0;
+      if (Date.now() - prev.timestamp > TTL_MS) {
+        entries.delete(id);
+        return 0;
+      }
+      return prev.count;
+    },
+    reset(id) {
+      if (id) entries.delete(id);
+    },
+  };
+})();
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
@@ -273,6 +319,105 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
 
     // Mark account unavailable (auto-calculates cooldown with exponential backoff, or precise resetsAtMs)
     const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model, result.resetsAtMs);
+
+    // Auto-disable on well-known upstream failure modes so the account is
+    // skipped in rotation and the user sees a clear reason in the dashboard.
+
+    // 403 "Banned (request illegal)" — CodeBuddy code 11140. Refresh does not help.
+    if (result.status === 403 && typeof result.error === "string" && result.error.includes("11140")) {
+      try {
+        await updateProviderConnection(credentials.connectionId, {
+          isActive: false,
+          testStatus: "error",
+          lastError: "Banned (request illegal)",
+          lastErrorAt: new Date().toISOString(),
+        });
+        log.warn("AUTH", `Account ${credentials.connectionName} auto-disabled (banned: request illegal)`);
+      } catch (e) { log.warn("AUTH", `auto-disable (banned) failed: ${e.message}`); }
+    }
+
+    // 429 with CodeBuddy code 14018 — "Credits exhausted". Account has no more quota.
+    if (result.status === 429 && typeof result.error === "string" && result.error.includes("14018")) {
+      try {
+        await updateProviderConnection(credentials.connectionId, {
+          isActive: false,
+          testStatus: "error",
+          lastError: "Credits exhausted",
+          lastErrorAt: new Date().toISOString(),
+        });
+        log.warn("AUTH", `Account ${credentials.connectionName} auto-disabled (credits exhausted)`);
+      } catch (e) { log.warn("AUTH", `auto-disable (credits) failed: ${e.message}`); }
+    }
+
+    // 429 with free-tier exhaustion signal — resets on rolling 24h window.
+    if (
+      result.status === 429 &&
+      typeof result.error === "string" &&
+      (result.error.includes("free-usage-exhausted") ||
+        result.error.includes("included free usage") ||
+        /tokens \(actual\/limit\):\s*\d+\/\d+/.test(result.error))
+    ) {
+      try {
+        await updateProviderConnection(credentials.connectionId, {
+          isActive: false,
+          testStatus: "error",
+          lastError: "Free usage exhausted (resets rolling 24h)",
+          lastErrorAt: new Date().toISOString(),
+        });
+        log.warn("AUTH", `Account ${credentials.connectionName} auto-disabled (free usage exhausted — resets 24h)`);
+      } catch (e) { log.warn("AUTH", `auto-disable (free-usage) failed: ${e.message}`); }
+    }
+
+    // Upstream 502 connect timeout — mark error but keep account active (transient).
+    if (result.status === 502 && typeof result.error === "string" && result.error.includes("connect timeout")) {
+      try {
+        await updateProviderConnection(credentials.connectionId, {
+          testStatus: "error",
+          lastError: "Connect timeout",
+          lastErrorAt: new Date().toISOString(),
+        });
+        log.warn("AUTH", `Account ${credentials.connectionName} connect timeout — marked error, skipping`);
+      } catch (e) { log.warn("AUTH", `mark connect-timeout failed: ${e.message}`); }
+    }
+
+    // Upstream 403 "Access denied" that survives OAuth refresh + retry is
+    // an anti-abuse / IP block, not a per-account token issue. Track
+    // consecutive occurrences per connection and act after a threshold.
+    // Default: DELETE the connection (farm-account preset, override via env).
+    if (
+      result.status === 403 &&
+      typeof result.error === "string" &&
+      /access denied/i.test(result.error) &&
+      !result.error.includes("11140")
+    ) {
+      accessDeniedTracker.record(credentials.connectionId);
+      const streak = accessDeniedTracker.count(credentials.connectionId);
+      if (streak >= ACCESS_DENIED_DISABLE_THRESHOLD) {
+        const label = credentials.connectionName || credentials.connectionId?.slice?.(0, 8) || "?";
+        try {
+          if (ACCESS_DENIED_ACTION === "delete") {
+            await deleteProviderConnection(credentials.connectionId);
+            log.warn("AUTH", `Account ${label} DELETED (403 Access denied ${streak}× — IP/anti-abuse; refresh does not help)`);
+          } else if (ACCESS_DENIED_ACTION === "disable") {
+            await updateProviderConnection(credentials.connectionId, {
+              isActive: false,
+              testStatus: "error",
+              lastError: `403 Access denied ${streak}× (IP/anti-abuse — refresh does not help)`,
+              lastErrorAt: new Date().toISOString(),
+            });
+            log.warn("AUTH", `Account ${label} auto-disabled (403 Access denied ${streak}×)`);
+          } else {
+            await updateProviderConnection(credentials.connectionId, {
+              testStatus: "error",
+              lastError: `403 Access denied ${streak}× (IP/anti-abuse — refresh does not help)`,
+              lastErrorAt: new Date().toISOString(),
+            });
+            log.warn("AUTH", `Account ${label} marked error (403 Access denied ${streak}×)`);
+          }
+        } catch (e) { log.warn("AUTH", `access-denied action failed: ${e.message}`); }
+        accessDeniedTracker.reset(credentials.connectionId);
+      }
+    }
 
     if (shouldFallback) {
       log.warn("FALLBACK", `⇄ ACC:${credentials.connectionName} UNAVAILABLE (${result.status}) → NEXT ACCOUNT`);
