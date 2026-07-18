@@ -1,10 +1,6 @@
 import { randomUUID } from "crypto";
 import { gzipSync } from "zlib";
 import { DefaultExecutor } from "./default.js";
-import {
-  createContentFilterCache,
-  applyFiltersToMessages,
-} from "../utils/contentFilters.js";
 
 const SYSTEM_PROMPT = "You are CodeBuddy Code.";
 const ALLOWED_FIELDS = [
@@ -12,8 +8,9 @@ const ALLOWED_FIELDS = [
   "tool_choice", "parallel_tool_calls", "response_format",
 ];
 
-const filters = createContentFilterCache("codebuddy");
-export const invalidateContentFiltersCache = filters.invalidate;
+// Content filters are only wired for codebuddy-cn — global does not need them.
+// Export a no-op invalidator so /api/settings' broadcast doesn't crash.
+export const invalidateContentFiltersCache = () => {};
 
 function requestId() {
   return randomUUID().replace(/-/g, "");
@@ -79,11 +76,6 @@ export class CodeBuddyGlobalExecutor extends DefaultExecutor {
     super("codebuddy");
   }
 
-  async execute(params) {
-    this._contentFilters = await filters.load();
-    return super.execute(params);
-  }
-
   transformRequest(model, body) {
     const source = super.transformRequest(model, body);
     const transformed = { model, messages: normalizeMessages(source.messages), stream: true };
@@ -101,10 +93,6 @@ export class CodeBuddyGlobalExecutor extends DefaultExecutor {
     if (Array.isArray(source.tools)) transformed.tools = normalizeTools(source.tools);
     const maxTokens = Number(source.max_tokens ?? source.max_completion_tokens);
     if (Number.isFinite(maxTokens) && maxTokens > 0) transformed.max_tokens = Math.max(maxTokens, 16);
-    const rules = this._contentFilters || [];
-    if (rules.length > 0 && Array.isArray(transformed.messages)) {
-      transformed.messages = applyFiltersToMessages(transformed.messages, rules);
-    }
     return transformed;
   }
 

@@ -1,20 +1,12 @@
 import { DefaultExecutor } from "./default.js";
-import {
-  createContentFilterCache,
-  applyFiltersToMessages,
-} from "../utils/contentFilters.js";
 
-const filters = createContentFilterCache("qwencloud");
-export const invalidateContentFiltersCache = filters.invalidate;
+// Content filters are only wired for codebuddy-cn — qwencloud does not need
+// them. Export a no-op invalidator so /api/settings' broadcast doesn't crash.
+export const invalidateContentFiltersCache = () => {};
 
 export class QwenCloudExecutor extends DefaultExecutor {
   constructor() {
     super("qwencloud");
-  }
-
-  async execute(params) {
-    this._contentFilters = await filters.load();
-    return super.execute(params);
   }
 
   transformRequest(model, body, stream, credentials) {
@@ -23,10 +15,6 @@ export class QwenCloudExecutor extends DefaultExecutor {
       transformed.messages = transformed.messages.filter(
         (msg) => msg && typeof msg === "object" && !["system", "developer"].includes(msg.role)
       );
-    }
-    const rules = this._contentFilters || [];
-    if (rules.length > 0 && Array.isArray(transformed.messages)) {
-      transformed.messages = applyFiltersToMessages(transformed.messages, rules);
     }
     return transformed;
   }

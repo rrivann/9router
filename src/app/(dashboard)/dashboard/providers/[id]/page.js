@@ -1946,7 +1946,7 @@ export default function ProviderDetailPage() {
         {renderModelsSection()}
       </Card>
 
-      {(providerId === "codebuddy-cn" || providerId === "codebuddy" || providerId === "qwencloud") && (
+      {providerId === "codebuddy-cn" && (
         <Card>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Content Filters</h2>
