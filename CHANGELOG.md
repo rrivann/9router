@@ -1,3 +1,41 @@
+# v0.5.40 (2026-07-19)
+
+## Features
+- **CodeBuddy-CN**: add `kimi-k3` model — 1M-token context window, max output up to 1,048,576, vision + reasoning (OpenAI `reasoning_effort` shape). Validated live via gateway.
+
+# v0.5.39 (2026-07-19)
+
+## Fixes
+- **Tunnel**: drop hard health-check gate on enable
+
+# v0.5.38 (2026-07-19)
+
+## Features
+- **Thinking**: upgrade `medium`→`max` effort for codebuddy and `claude-opus-4.7-1m`
+
+# v0.5.37 (2026-07-19)
+
+## Features
+- **Console-log**: highlight request start/end lines
+
+## Improvements
+- **CLI**: rebrand npm package to `9router-gacor` (from `9router`)
+- **Content-filter**: scope engine to `codebuddy-cn` only
+
+# v0.5.36 (2026-07-18)
+
+## Features
+- **Providers**: port `codebuddy`, `qwencloud` providers + content filter engine
+- **Provider-test**: test endpoints for `codebuddy`, `codebuddy-cn`, `qwencloud`
+- **Thinking**: `max` effort for OpenAI-compatible gateways + capabilities entries
+- **Quota-tracker**: masked apiKey display + qwencloud dedupe
+- **Providers-detail**: bulk actions, safe Apply Proxy, Content Filters UI
+- **Settings**: deep-merge nested per-provider maps
+- **Auth**: auto-disable accounts on well-known upstream failure modes
+
+## Fixes
+- **Providers**: count both OAuth and apikey rows for hybrid OAuth providers
+
 # v0.5.35 (2026-07-16)
 
 ## Features
