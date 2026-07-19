@@ -349,6 +349,21 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       } catch (e) { log.warn("AUTH", `auto-disable (credits) failed: ${e.message}`); }
     }
 
+    // 429 with CodeBuddy code 14017 — "The trial version is not yet activated".
+    // Account trial isn't activated yet; refresh won't help. Disable so it's
+    // skipped in rotation and the dashboard shows the exact reason.
+    if (result.status === 429 && typeof result.error === "string" && result.error.includes("14017")) {
+      try {
+        await updateProviderConnection(credentials.connectionId, {
+          isActive: false,
+          testStatus: "error",
+          lastError: "Trial version not yet activated",
+          lastErrorAt: new Date().toISOString(),
+        });
+        log.warn("AUTH", `Account ${credentials.connectionName} auto-disabled (trial version not yet activated)`);
+      } catch (e) { log.warn("AUTH", `auto-disable (trial-not-activated) failed: ${e.message}`); }
+    }
+
     // 429 with free-tier exhaustion signal — resets on rolling 24h window.
     if (
       result.status === 429 &&

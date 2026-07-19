@@ -142,6 +142,7 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
     setSaving(true);
     setBulkResult(null);
     let success = 0;
+    let skipped = 0;
     let failed = 0;
     for (const entry of plan) {
       try {
@@ -152,19 +153,22 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
             provider,
             apiKey: entry.apiKey,
             name: entry.name,
-            priority: 1,
+            // Omit priority: let the backend append at the bottom (max+1). A
+            // hardcoded priority:1 made every bulk-imported key steal the top
+            // slot instead of landing below the existing accounts.
             testStatus: "unknown",
             ...(entry.providerSpecificData ? { providerSpecificData: entry.providerSpecificData } : {}),
           }),
         });
         if (res.ok) success++;
+        else if (res.status === 409) skipped++;  // duplicate apiKey — already exists, not added
         else failed++;
       } catch {
         failed++;
       }
     }
+    setBulkResult({ success, skipped, failed });
     setSaving(false);
-    setBulkResult({ success, failed });
     if (success > 0 && onBulkDone) onBulkDone();
   };
 
@@ -195,7 +199,9 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
             />
             {bulkResult && (
               <div className={`text-sm font-medium ${bulkResult.failed > 0 ? "text-yellow-400" : "text-green-400"}`}>
-                ✓ {bulkResult.success} added{bulkResult.failed > 0 ? `, ✗ ${bulkResult.failed} failed` : ""}
+                ✓ {bulkResult.success} added
+                {bulkResult.skipped > 0 ? `, ⊘ ${bulkResult.skipped} skipped (already exists)` : ""}
+                {bulkResult.failed > 0 ? `, ✗ ${bulkResult.failed} failed` : ""}
               </div>
             )}
             <div className="flex gap-2">

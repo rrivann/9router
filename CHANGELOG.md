@@ -1,3 +1,12 @@
+# v0.5.41 (2026-07-19)
+
+## Features
+- **CodeBuddy**: auto-disable accounts on trial-not-activated (429 code 14017)
+
+## Fixes
+- **CodeBuddy bulk-add**: new API keys now append at the bottom priority instead of stealing the top slot (root cause: `priority || 1` in the POST route forced every bulk-imported key to priority 1)
+- **CodeBuddy bulk-add**: skip duplicate API keys — returns 409 "API key already exists", counted as "skipped" in the bulk-add result
+
 # v0.5.40 (2026-07-19)
 
 ## Features

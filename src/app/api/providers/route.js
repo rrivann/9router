@@ -177,13 +177,26 @@ export async function POST(request) {
       authType: isWebCookieProvider ? "cookie" : "apikey",
       name: connectionName,
       apiKey: apiKey || "",
-      priority: priority || 1,
+      // Pass priority through untouched. `priority || 1` forced every
+      // bulk-imported key (which sends no priority) to 1, inserting at the top
+      // and reversing bulk-add order. Omitting it lets createProviderConnection
+      // fall back to max+1 (append at bottom), matching bulk-add expectations.
+      priority,
       globalPriority: globalPriority || null,
       defaultModel: defaultModel || null,
       providerSpecificData: mergedProviderSpecificData,
       isActive: true,
       testStatus: testStatus || "unknown",
     });
+
+    // Duplicate apiKey — skipped, not created. 409 so bulk-add counts it as
+    // "skipped" (not failed), and the UI can show why.
+    if (newConnection && newConnection.skippedDuplicate) {
+      return NextResponse.json(
+        { error: "API key already exists", skipped: true, skipReason: "duplicate apiKey" },
+        { status: 409 }
+      );
+    }
 
     // Hide sensitive fields
     const result = { ...newConnection };

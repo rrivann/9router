@@ -153,12 +153,34 @@ export async function createProviderConnection(data) {
       return;
     }
 
+    // apiKey duplicate guard: skip instead of adding the same key under a new
+    // name. Only applies to apikey connections with a non-empty key; oauth and
+    // cookie rows are keyed by identity, not the credential string.
+    if (data.authType === "apikey" && data.apiKey) {
+      const dupKey = all.find(c => c.authType === "apikey" && c.apiKey === data.apiKey);
+      if (dupKey) {
+        // Return the existing row flagged as a skip — the caller (route) turns
+        // this into 409 so bulk-add counts it as "skipped", not "added".
+        result = { ...dupKey, skippedDuplicate: true, skipReason: "duplicate apiKey" };
+        return;
+      }
+    }
+
     let connectionName = data.name || null;
     if (!connectionName && (data.authType === "oauth" || data.authType === "access_token")) {
       connectionName = deriveConnectionName(data, data.email || `Account ${all.length + 1}`);
     }
+    // Treat only null/undefined/"" as "missing" — priority 0 must not fall
+    // through to the default (sort uses `priority || 999`, so 0 already sorts
+    // last). Falsy-checking `!connectionPriority` would silently clobber an
+    // explicit 0.
     let connectionPriority = data.priority;
-    if (!connectionPriority) {
+    if (connectionPriority == null || connectionPriority === "") {
+      // Always append at bottom (max+1). Inserting every new row as priority=1
+      // made bulk-import reverse order after reorderInTx (newest-first tiebreak
+      // on updatedAt), so the last imported account stole fill-first traffic.
+      // Appending keeps bulk-add order stable: newest key goes to the lowest
+      // priority slot instead of the top.
       connectionPriority = all.reduce((m, c) => Math.max(m, c.priority || 0), 0) + 1;
     }
 
