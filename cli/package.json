@@ -1,6 +1,6 @@
 {
   "name": "9router-gacor",
-  "version": "0.5.39",
+  "version": "0.5.40",
   "description": "9router-gacor — FREE AI Router & Token Saver. Route Claude Code / Cursor / Codex / Cline / Copilot to 3 aggregator providers (CodeBuddy, CodeBuddy CN, Qwen Cloud) with auto-fallback, quota tracker, and 20-40% token savings.",
   "bin": {
     "9router-gacor": "./cli.js"
