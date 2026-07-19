@@ -26,6 +26,8 @@ product
 # misc
 .DS_Store
 *.pem
+# content-filters.json: dashboard "export" download artifact (config lives in DB settings), not runtime
+content-filters.json
 
 # debug
 npm-debug.log*
