@@ -1235,10 +1235,13 @@ export default function ProviderDetailPage() {
     if (testingModelIds.has(modelId)) return;
     setTestingModelIds((prev) => new Set(prev).add(modelId));
     try {
+      // Test with the selected account when one is selected; otherwise normal routing.
+      const body = { model: `${providerStorageAlias}/${modelId}` };
+      if (selectedConnectionIds.length > 0) body.connectionId = selectedConnectionIds[0];
       const res = await fetch("/api/models/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: `${providerStorageAlias}/${modelId}` }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       setModelTestResults((prev) => ({ ...prev, [modelId]: data.ok ? "ok" : "error" }));
@@ -1942,6 +1945,11 @@ export default function ProviderDetailPage() {
         </div>
         {!!modelsTestError && (
           <p className="text-xs text-red-500 mb-3 break-words">{modelsTestError}</p>
+        )}
+        {selectedConnectionIds.length > 0 && (
+          <p className="text-xs text-primary/80 mb-3">
+            Testing with selected account: {connections.find((c) => c.id === selectedConnectionIds[0])?.name || connections.find((c) => c.id === selectedConnectionIds[0])?.email || selectedConnectionIds[0].slice(0, 8)}
+          </p>
         )}
         {renderModelsSection()}
       </Card>

@@ -241,8 +241,14 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   let lastError = null;
   let lastStatus = null;
 
+  // Internal test probe: force a specific account when the dashboard "test model
+  // with selected account" flow passes X-9Router-Test-Connection. Preferred once;
+  // if that account then errors, normal fallback to the next account still applies.
+  const testConnectionId = request?.headers?.get("x-9router-test-connection") || null;
+  const credentialOptions = testConnectionId ? { preferredConnectionId: testConnectionId } : {};
+
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, credentialOptions);
 
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {

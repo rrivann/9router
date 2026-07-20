@@ -1,3 +1,8 @@
+# v0.5.43 (2026-07-20)
+
+## Features
+- **Providers**: test a model using the selected account — when one or more connections are selected, "Test" on a model in Available Models now probes via that account (falls back to normal routing when nothing is selected)
+
 # v0.5.42 (2026-07-20)
 
 ## Features

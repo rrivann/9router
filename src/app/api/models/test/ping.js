@@ -50,8 +50,11 @@ async function getInternalHeaders() {
   return headers;
 }
 
-export async function pingModelByKind(model, kind, baseUrl = `http://127.0.0.1:${process.env.PORT || UPDATER_CONFIG.appPort}`) {
+export async function pingModelByKind(model, kind, baseUrl = `http://127.0.0.1:${process.env.PORT || UPDATER_CONFIG.appPort}`, connectionId = null) {
   const headers = await getInternalHeaders();
+  // Force a specific account for the probe when one is selected (test with that
+  // account). Only meaningful for the chat/llm path; other kinds ignore it.
+  if (connectionId) headers["X-9Router-Test-Connection"] = connectionId;
   const start = Date.now();
 
   if (kind === "embedding") {
