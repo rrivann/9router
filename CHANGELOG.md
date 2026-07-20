@@ -1,3 +1,12 @@
+# v0.5.42 (2026-07-20)
+
+## Features
+- **CodeBuddy**: add `glm-5.2` model — 1M-token context, max output 131k, reasoning (text-only)
+- **Thinking**: upgrade `medium`→`max` for codebuddy-cn `kimi-k3` + `glm-5.2` and codebuddy `glm-5.2`
+
+## Fixes
+- **Capabilities**: resolve provider short aliases (e.g. `cbcn`, `cb`) to canonical ids before the capability lookup — `kimi-k3` (and other alias-routed models) now correctly show vision/reasoning badges instead of falling through to the lossy pattern match
+
 # v0.5.41 (2026-07-19)
 
 ## Features

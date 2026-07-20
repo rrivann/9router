@@ -232,6 +232,9 @@ const OPENAI_MAX_MODEL_EXCEPTIONS = new Set([
 // OPENAI_MAX_EFFORT_PROVIDERS and not in OPENAI_MAX_MODEL_EXCEPTIONS).
 const OPENAI_MEDIUM_TO_MAX_UPGRADES = new Set([
   "codebuddy:claude-opus-4.7-1m",
+  "codebuddy:glm-5.2",
+  "codebuddy-cn:kimi-k3",
+  "codebuddy-cn:glm-5.2",
 ]);
 
 // Apply unified thinking config to body in the resolved provider-native format.

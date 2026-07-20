@@ -55,6 +55,7 @@ export default {
     { id: "gemini-3.1-flash-lite", name: "Gemini-3.1-flash-lite", maxInputTokens: 200000, maxOutputTokens: 65536 },
     { id: "gemini-2.5-pro", name: "Gemini-2.5-Pro", maxInputTokens: 400000, maxOutputTokens: 64000 },
     { id: "deepseek-v3-0324", name: "DeepSeek-V3", maxInputTokens: 128000, maxOutputTokens: 8192, strip: ["image", "audio"] },
+    { id: "glm-5.2", name: "GLM-5.2", maxInputTokens: 1000000, maxOutputTokens: 131072, strip: ["image", "audio"] },
     { id: "glm-5.0", name: "GLM-5.0", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
   ],
   oauth: {

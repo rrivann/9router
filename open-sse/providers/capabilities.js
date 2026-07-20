@@ -23,6 +23,7 @@
 // 2.0+, Grok, Perplexity). Verify with: curl -s https://models.dev/api.json
 
 import { matchPattern } from "./pricing.js";
+import { PROVIDER_ID_TO_ALIAS } from "../config/providerModels.js";
 
 /**
  * Safe floor — every resolved result is merged over this so consumers
@@ -166,6 +167,8 @@ export const PROVIDER_CAPABILITIES = {
     "gemini-3.1-flash-lite": { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 200000, maxOutput: 65536 },
     "gemini-2.5-pro":      { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 400000, maxOutput: 64000 },
     "deepseek-v3-0324":    { reasoning: true, thinkingFormat: "openai", contextWindow: 128000, maxOutput: 8192 },
+    // GLM-5.2: 1M context, max output 131k (Zhipuai Coding Plan spec). Text-only reasoning model (no vision).
+    "glm-5.2":             { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
     "glm-5.0":             { reasoning: true, thinkingFormat: "openai", contextWindow: 200000, maxOutput: 48000 },
   },
   "codebuddy-cn": {
@@ -323,15 +326,29 @@ export const PATTERN_CAPABILITIES = [
  * @param {string} model
  * @returns {object} full capabilities object
  */
+// Invert PROVIDER_ID_TO_ALIAS so a provider short alias (e.g. "cbcn") resolves
+// to its canonical id ("codebuddy-cn") before the PROVIDER_CAPABILITIES lookup.
+// Callers like /api/models pass the alias (PROVIDER_MODELS is keyed by alias),
+// so without this the provider-specific entries are never hit and every model
+// falls through to the lossy pattern match (e.g. kimi-k3 loses vision).
+const ALIAS_TO_PROVIDER_ID = Object.fromEntries(
+  Object.entries(PROVIDER_ID_TO_ALIAS)
+    .filter(([id, alias]) => id !== alias)
+    .map(([id, alias]) => [alias, id])
+);
+
 export function getCapabilitiesForModel(provider, model) {
   if (!model) return { ...DEFAULT_CAPABILITIES };
 
   // Canonical exact lookup strips vendor prefix: "anthropic/claude-opus-4.7" -> "claude-opus-4.7".
   const baseModel = model.includes("/") ? model.split("/").pop() : model;
 
+  // Normalize provider alias → id so alias-keyed lookups hit the right entry.
+  const providerId = provider ? (ALIAS_TO_PROVIDER_ID[provider] || provider) : null;
+
   // 1. Provider-specific override
-  if (provider) {
-    const providerCaps = PROVIDER_CAPABILITIES[provider];
+  if (providerId) {
+    const providerCaps = PROVIDER_CAPABILITIES[providerId];
     if (providerCaps?.[model]) return { ...DEFAULT_CAPABILITIES, ...providerCaps[model] };
     if (providerCaps?.[baseModel]) return { ...DEFAULT_CAPABILITIES, ...providerCaps[baseModel] };
   }
