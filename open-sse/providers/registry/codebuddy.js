@@ -44,6 +44,7 @@ export default {
     { id: "claude-opus-4.7-1m", name: "Claude Opus 4.7 1M", maxInputTokens: 1000000, maxOutputTokens: 24000 },
     { id: "claude-opus-4.6", name: "Claude Opus 4.6", maxInputTokens: 176000, maxOutputTokens: 24000 },
     { id: "claude-haiku-4.5", name: "Claude Haiku 4.5", maxInputTokens: 176000, maxOutputTokens: 24000 },
+    { id: "gpt-5.6-sol", name: "GPT-5.6-Sol", maxInputTokens: 1050000, maxOutputTokens: 128000 },
     { id: "gpt-5.5", name: "GPT-5.5", maxInputTokens: 1000000, maxOutputTokens: 72000 },
     { id: "gpt-5.4", name: "GPT-5.4", maxInputTokens: 272000, maxOutputTokens: 128000 },
     { id: "gpt-5.3-codex", name: "GPT-5.3-Codex", maxInputTokens: 272000, maxOutputTokens: 128000 },

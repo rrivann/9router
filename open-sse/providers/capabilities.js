@@ -156,6 +156,7 @@ export const PROVIDER_CAPABILITIES = {
     "claude-opus-4.7-1m":  { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 24000 },
     "claude-opus-4.6":     { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 176000, maxOutput: 24000 },
     "claude-haiku-4.5":    { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 176000, maxOutput: 24000 },
+    "gpt-5.6-sol":         { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1050000, maxOutput: 128000 },
     "gpt-5.5":             { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 72000 },
     "gpt-5.4":             { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
     "gpt-5.3-codex":       { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },

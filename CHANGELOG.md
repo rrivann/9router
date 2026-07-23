@@ -1,3 +1,8 @@
+# v0.5.44 (2026-07-23)
+
+## Features
+- **CodeBuddy Global**: add `gpt-5.6-sol` model — 1,050,000-token context, max output 128k, vision + reasoning (OpenAI `reasoning_effort`; valid levels `low|medium|high|xhigh|max`, `minimal` rejected upstream). Verified live via gateway (text, vision on red-pixel PNG, all reasoning levels including `max`).
+
 # v0.5.43 (2026-07-20)
 
 ## Features
