@@ -59,13 +59,19 @@ function normalizeTools(tools) {
 
 function normalizeMessages(messages) {
   if (!Array.isArray(messages)) return messages;
-  return messages.map((message) => {
+  const result = messages.map((message) => {
     if (!message || typeof message !== "object") return message;
     if (message.role === "user" && typeof message.content === "string") {
       return { ...message, content: [{ type: "text", text: message.content }] };
     }
     return { ...message };
   });
+  // CodeBuddy upstream requires a system message (rejects with 11101 otherwise).
+  // Inject a neutral placeholder only when the client didn't send one.
+  if (!result.some((m) => m && m.role === "system")) {
+    result.unshift({ role: "system", content: "" });
+  }
+  return result;
 }
 
 export class CodeBuddyGlobalExecutor extends DefaultExecutor {
