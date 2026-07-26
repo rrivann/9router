@@ -1,3 +1,8 @@
+# v0.5.46 (2026-07-26)
+
+## Fixes
+- **CodeBuddy Global**: inject neutral system-message placeholder when the client doesn't send one — CodeBuddy upstream rejects systemless requests with `11101: Parse message failed`. Client system prompts still pass through untouched; the empty placeholder only fills the gap when absent. Fixes 400 errors on all CodeBuddy Global accounts when routing systemless clients.
+
 # v0.5.45 (2026-07-26)
 
 ## Fixes
