@@ -2,7 +2,6 @@ import { randomUUID } from "crypto";
 import { gzipSync } from "zlib";
 import { DefaultExecutor } from "./default.js";
 
-const SYSTEM_PROMPT = "You are CodeBuddy Code.";
 const ALLOWED_FIELDS = [
   "temperature", "top_p", "presence_penalty", "frequency_penalty", "stop",
   "tool_choice", "parallel_tool_calls", "response_format",
@@ -59,16 +58,14 @@ function normalizeTools(tools) {
 }
 
 function normalizeMessages(messages) {
-  const result = [{ role: "system", content: SYSTEM_PROMPT }];
-  for (const message of Array.isArray(messages) ? messages : []) {
-    if (!message || typeof message !== "object" || ["system", "developer"].includes(message.role)) continue;
+  if (!Array.isArray(messages)) return messages;
+  return messages.map((message) => {
+    if (!message || typeof message !== "object") return message;
     if (message.role === "user" && typeof message.content === "string") {
-      result.push({ ...message, content: [{ type: "text", text: message.content }] });
-    } else {
-      result.push({ ...message });
+      return { ...message, content: [{ type: "text", text: message.content }] };
     }
-  }
-  return result;
+    return { ...message };
+  });
 }
 
 export class CodeBuddyGlobalExecutor extends DefaultExecutor {
