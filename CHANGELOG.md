@@ -1,3 +1,8 @@
+# v0.5.45 (2026-07-26)
+
+## Fixes
+- **CodeBuddy Global**: remove persona injection — the global executor no longer prepends `"You are CodeBuddy Code."` as a system message and no longer strips the client's original `system`/`developer` messages. System prompts from the client now pass through untouched, matching the behaviour of the CN variant.
+
 # v0.5.44 (2026-07-23)
 
 ## Features
