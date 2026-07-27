@@ -1,3 +1,8 @@
+# v0.5.47 (2026-07-26)
+
+## Features
+- **CodeBuddy Global**: wire content filters — the global executor now loads and applies per-provider content filter rules (same mechanism as the CN variant). Filters are user-configured in Dashboard → Provider → Content Filters and hot-reload on settings save.
+
 # v0.5.46 (2026-07-26)
 
 ## Fixes
