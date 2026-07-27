@@ -1,3 +1,8 @@
+# v0.5.48 (2026-07-26)
+
+## Fixes
+- **CodeBuddy Global**: show Content Filters UI section on the provider dashboard page — the condition was hardcoded to `codebuddy-cn` only; now `codebuddy` (global) also renders the filter management card (add/edit/toggle/import/export).
+
 # v0.5.47 (2026-07-26)
 
 ## Features
