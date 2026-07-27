@@ -1,15 +1,18 @@
 import { randomUUID } from "crypto";
 import { gzipSync } from "zlib";
 import { DefaultExecutor } from "./default.js";
+import {
+  createContentFilterCache,
+  applyFiltersToMessages,
+} from "../utils/contentFilters.js";
 
 const ALLOWED_FIELDS = [
   "temperature", "top_p", "presence_penalty", "frequency_penalty", "stop",
   "tool_choice", "parallel_tool_calls", "response_format",
 ];
 
-// Content filters are only wired for codebuddy-cn — global does not need them.
-// Export a no-op invalidator so /api/settings' broadcast doesn't crash.
-export const invalidateContentFiltersCache = () => {};
+const filters = createContentFilterCache("codebuddy");
+export const invalidateContentFiltersCache = filters.invalidate;
 
 function requestId() {
   return randomUUID().replace(/-/g, "");
@@ -79,9 +82,19 @@ export class CodeBuddyGlobalExecutor extends DefaultExecutor {
     super("codebuddy");
   }
 
+  async execute(params) {
+    this._contentFilters = await filters.load();
+    return super.execute(params);
+  }
+
   transformRequest(model, body) {
     const source = super.transformRequest(model, body);
-    const transformed = { model, messages: normalizeMessages(source.messages), stream: true };
+    let messages = normalizeMessages(source.messages);
+    const rules = this._contentFilters || [];
+    if (rules.length > 0) {
+      messages = applyFiltersToMessages(messages, rules);
+    }
+    const transformed = { model, messages, stream: true };
     // Honor the client's reasoning_effort if the translator already set one
     // (via alias suffix, providerThinking override, or direct request field).
     // CodeBuddy accepts "minimal|low|medium|high|xhigh|max". Default to xhigh.
