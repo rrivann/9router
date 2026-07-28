@@ -1,3 +1,9 @@
+# v0.5.50 (2026-07-26)
+
+## Fixes
+- **CodeBuddy Global**: update `claude-opus-4.7-1m` maxOutput 24K → 128K and `claude-opus-4.6` contextWindow 176K → 1M, maxOutput 24K → 128K. Both models accept 1M context and 128K output on the codebuddy upstream.
+- **CodeBuddy CN**: update `glm-5.2` maxOutput 48K → 131072 to match the global variant (Zhipuai Coding Plan spec: 1M context, 131K output).
+
 # v0.5.49 (2026-07-26)
 
 ## Features
