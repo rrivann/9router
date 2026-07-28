@@ -1,3 +1,12 @@
+# v0.5.49 (2026-07-26)
+
+## Features
+- **CodeBuddy Global**: add 5 new models — `kimi-k3` (1M ctx, 1M out, vision, reasoning), `kimi-k2.5` (164K ctx, 32K out, vision, reasoning), `minimax-m3` (512K ctx, 48K out, vision, reasoning), `gpt-5.6-luna` (1.05M ctx, 128K out, vision, reasoning), `gpt-5.6-terra` (1.05M ctx, 128K out, vision, reasoning). All tested live: text + vision confirmed working via gateway.
+
+## Fixes
+- **CodeBuddy Global**: use non-empty system placeholder (`" "`) instead of empty string — kimi models reject empty-string system content with `11133: invalid_parameter_value`.
+- **CodeBuddy Global**: add provider-specific capability entries for the 5 new models so `stripUnsupportedModalities` preserves image data (without these, vision was silently stripped).
+
 # v0.5.48 (2026-07-26)
 
 ## Fixes
