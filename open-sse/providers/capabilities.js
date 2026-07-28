@@ -171,6 +171,11 @@ export const PROVIDER_CAPABILITIES = {
     // GLM-5.2: 1M context, max output 131k (Zhipuai Coding Plan spec). Text-only reasoning model (no vision).
     "glm-5.2":             { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
     "glm-5.0":             { reasoning: true, thinkingFormat: "openai", contextWindow: 200000, maxOutput: 48000 },
+    "kimi-k3":             { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 1048576 },
+    "kimi-k2.5":           { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 164000, maxOutput: 32000 },
+    "minimax-m3":          { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 512000, maxOutput: 48000 },
+    "gpt-5.6-luna":        { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1050000, maxOutput: 128000 },
+    "gpt-5.6-terra":       { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1050000, maxOutput: 128000 },
   },
   "codebuddy-cn": {
     "glm-5.2":            { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 48000 },

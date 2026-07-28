@@ -45,6 +45,8 @@ export default {
     { id: "claude-opus-4.6", name: "Claude Opus 4.6", maxInputTokens: 176000, maxOutputTokens: 24000 },
     { id: "claude-haiku-4.5", name: "Claude Haiku 4.5", maxInputTokens: 176000, maxOutputTokens: 24000 },
     { id: "gpt-5.6-sol", name: "GPT-5.6-Sol", maxInputTokens: 1050000, maxOutputTokens: 128000 },
+    { id: "gpt-5.6-luna", name: "GPT-5.6-Luna", maxInputTokens: 1050000, maxOutputTokens: 128000 },
+    { id: "gpt-5.6-terra", name: "GPT-5.6-Terra", maxInputTokens: 1050000, maxOutputTokens: 128000 },
     { id: "gpt-5.5", name: "GPT-5.5", maxInputTokens: 1000000, maxOutputTokens: 72000 },
     { id: "gpt-5.4", name: "GPT-5.4", maxInputTokens: 272000, maxOutputTokens: 128000 },
     { id: "gpt-5.3-codex", name: "GPT-5.3-Codex", maxInputTokens: 272000, maxOutputTokens: 128000 },
@@ -58,6 +60,9 @@ export default {
     { id: "deepseek-v3-0324", name: "DeepSeek-V3", maxInputTokens: 128000, maxOutputTokens: 8192, strip: ["image", "audio"] },
     { id: "glm-5.2", name: "GLM-5.2", maxInputTokens: 1000000, maxOutputTokens: 131072, strip: ["image", "audio"] },
     { id: "glm-5.0", name: "GLM-5.0", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
+    { id: "kimi-k3", name: "Kimi-K3", maxInputTokens: 1000000, maxOutputTokens: 1048576 },
+    { id: "kimi-k2.5", name: "Kimi-K2.5", maxInputTokens: 164000, maxOutputTokens: 32000 },
+    { id: "minimax-m3", name: "MiniMax-M3", maxInputTokens: 512000, maxOutputTokens: 48000 },
   ],
   oauth: {
     baseUrl: "https://www.codebuddy.ai",

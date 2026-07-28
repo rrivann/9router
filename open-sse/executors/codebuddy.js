@@ -70,9 +70,10 @@ function normalizeMessages(messages) {
     return { ...message };
   });
   // CodeBuddy upstream requires a system message (rejects with 11101 otherwise).
-  // Inject a neutral placeholder only when the client didn't send one.
+  // Some models (kimi-k3, kimi-k2.5) reject empty-string system content (11133),
+  // so use a single space as a neutral, non-empty placeholder.
   if (!result.some((m) => m && m.role === "system")) {
-    result.unshift({ role: "system", content: "" });
+    result.unshift({ role: "system", content: " " });
   }
   return result;
 }
