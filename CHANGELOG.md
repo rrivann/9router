@@ -1,3 +1,8 @@
+# v0.5.51 (2026-07-26)
+
+## Changes
+- **Thinking**: change medium→max upgrade to medium→xhigh, and scope it to only `codebuddy:claude-opus-4.7-1m`. Removed `codebuddy:glm-5.2`, `codebuddy-cn:kimi-k3`, `codebuddy-cn:glm-5.2` from the upgrade list.
+
 # v0.5.50 (2026-07-26)
 
 ## Fixes
