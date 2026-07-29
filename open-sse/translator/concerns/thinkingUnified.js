@@ -223,18 +223,12 @@ const OPENAI_MAX_MODEL_EXCEPTIONS = new Set([
   "qwencloud:qwen3.7-max",
 ]);
 
-// Per-user override (2026-07-19): specific provider+model pairs where a
-// client-provided reasoning_effort:"medium" is silently upgraded to "max".
-// Rationale: default CLI clients (e.g. Claude Code) send "medium"; we want the
-// highest reasoning budget on this exact upstream without asking users to add a
-// model suffix. Only "medium" is rewritten — none/low/high/xhigh pass through
-// so explicit intent is preserved. Provider must also allow "max" (i.e. be in
-// OPENAI_MAX_EFFORT_PROVIDERS and not in OPENAI_MAX_MODEL_EXCEPTIONS).
-const OPENAI_MEDIUM_TO_MAX_UPGRADES = new Set([
+// Per-user override: specific provider+model pairs where a
+// client-provided reasoning_effort:"medium" is silently upgraded to "xhigh".
+// Only "medium" is rewritten — none/low/high/xhigh pass through
+// so explicit intent is preserved.
+const OPENAI_MEDIUM_TO_XHIGH_UPGRADES = new Set([
   "codebuddy:claude-opus-4.7-1m",
-  "codebuddy:glm-5.2",
-  "codebuddy-cn:kimi-k3",
-  "codebuddy-cn:glm-5.2",
 ]);
 
 // Apply unified thinking config to body in the resolved provider-native format.
@@ -256,14 +250,14 @@ function applyFormat(fmt, body, cfg, caps, provider = null, model = null) {
         const providerAllowsMax = OPENAI_MAX_EFFORT_PROVIDERS.has(provider)
           && !OPENAI_MAX_MODEL_EXCEPTIONS.has(`${provider}:${model}`);
         // Targeted upgrade: on specific provider+model pairs, silently promote
-        // "medium" → "max" so default CLI clients get max reasoning without
+        // "medium" → "xhigh" so default CLI clients get high reasoning without
         // needing a model suffix. Other levels pass through unchanged.
         if (
           level === "medium"
           && providerAllowsMax
-          && OPENAI_MEDIUM_TO_MAX_UPGRADES.has(`${provider}:${model}`)
+          && OPENAI_MEDIUM_TO_XHIGH_UPGRADES.has(`${provider}:${model}`)
         ) {
-          level = "max";
+          level = "xhigh";
         }
         if (level === "max" && !providerAllowsMax) {
           body.reasoning_effort = "xhigh";
