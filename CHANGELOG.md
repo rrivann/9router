@@ -1,3 +1,8 @@
+# v0.5.52 (2026-07-26)
+
+## Changes
+- **Thinking**: revert medium upgrade back to max (was xhigh) for `codebuddy:claude-opus-4.7-1m`. Scope unchanged — only this single model gets the upgrade.
+
 # v0.5.51 (2026-07-26)
 
 ## Changes
