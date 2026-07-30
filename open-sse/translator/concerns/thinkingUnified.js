@@ -224,10 +224,10 @@ const OPENAI_MAX_MODEL_EXCEPTIONS = new Set([
 ]);
 
 // Per-user override: specific provider+model pairs where a
-// client-provided reasoning_effort:"medium" is silently upgraded to "xhigh".
+// client-provided reasoning_effort:"medium" is silently upgraded to "max".
 // Only "medium" is rewritten — none/low/high/xhigh pass through
 // so explicit intent is preserved.
-const OPENAI_MEDIUM_TO_XHIGH_UPGRADES = new Set([
+const OPENAI_MEDIUM_TO_MAX_UPGRADES = new Set([
   "codebuddy:claude-opus-4.7-1m",
 ]);
 
@@ -250,14 +250,14 @@ function applyFormat(fmt, body, cfg, caps, provider = null, model = null) {
         const providerAllowsMax = OPENAI_MAX_EFFORT_PROVIDERS.has(provider)
           && !OPENAI_MAX_MODEL_EXCEPTIONS.has(`${provider}:${model}`);
         // Targeted upgrade: on specific provider+model pairs, silently promote
-        // "medium" → "xhigh" so default CLI clients get high reasoning without
+        // "medium" → "max" so default CLI clients get max reasoning without
         // needing a model suffix. Other levels pass through unchanged.
         if (
           level === "medium"
           && providerAllowsMax
-          && OPENAI_MEDIUM_TO_XHIGH_UPGRADES.has(`${provider}:${model}`)
+          && OPENAI_MEDIUM_TO_MAX_UPGRADES.has(`${provider}:${model}`)
         ) {
-          level = "xhigh";
+          level = "max";
         }
         if (level === "max" && !providerAllowsMax) {
           body.reasoning_effort = "xhigh";
