@@ -1,3 +1,8 @@
+# v0.5.53 (2026-07-26)
+
+## Changes
+- **Thinking**: add `codebuddy-cn:glm-5.2` to the medium→max upgrade list. Now `medium` → `max` for both `codebuddy:claude-opus-4.7-1m` and `codebuddy-cn:glm-5.2`.
+
 # v0.5.52 (2026-07-26)
 
 ## Changes
