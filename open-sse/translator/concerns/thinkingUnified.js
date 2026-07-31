@@ -229,6 +229,7 @@ const OPENAI_MAX_MODEL_EXCEPTIONS = new Set([
 // so explicit intent is preserved.
 const OPENAI_MEDIUM_TO_MAX_UPGRADES = new Set([
   "codebuddy:claude-opus-4.7-1m",
+  "codebuddy-cn:glm-5.2",
 ]);
 
 // Apply unified thinking config to body in the resolved provider-native format.
