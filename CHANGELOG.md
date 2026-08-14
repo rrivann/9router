@@ -1,3 +1,8 @@
+# v0.5.55 (2026-08-14)
+
+## Changes
+- **Thinking**: add `codebuddy:claude-opus-5` and `codebuddy-cn:glm-5.3` to the medium→max upgrade list.
+
 # v0.5.54 (2026-08-14)
 
 ## Features

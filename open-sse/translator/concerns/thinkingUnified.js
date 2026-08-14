@@ -228,7 +228,9 @@ const OPENAI_MAX_MODEL_EXCEPTIONS = new Set([
 // Only "medium" is rewritten — none/low/high/xhigh pass through
 // so explicit intent is preserved.
 const OPENAI_MEDIUM_TO_MAX_UPGRADES = new Set([
+  "codebuddy:claude-opus-5",
   "codebuddy:claude-opus-4.7-1m",
+  "codebuddy-cn:glm-5.3",
   "codebuddy-cn:glm-5.2",
 ]);
 
