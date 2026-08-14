@@ -1,3 +1,9 @@
+# v0.5.54 (2026-08-14)
+
+## Features
+- **CodeBuddy CN**: add `glm-5.3` model — GLM-5.3 (743B base, coding + cybersecurity focus). 1M context, 131K output, reasoning with OpenAI thinking format.
+- **CodeBuddy Global**: add `claude-opus-5` model — Claude Opus 5 with 1M token context window, 128K max output, vision + reasoning + search.
+
 # v0.5.53 (2026-07-26)
 
 ## Changes
