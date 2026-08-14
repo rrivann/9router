@@ -1,3 +1,8 @@
+# v0.5.57 (2026-08-14)
+
+## Fixes
+- Rebuild Next.js UI with correct version string (previous 0.5.56 shipped with stale 0.5.55 baked into webpack chunks).
+
 # v0.5.56 (2026-08-14)
 
 ## Fixes
