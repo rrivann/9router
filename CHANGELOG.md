@@ -1,3 +1,8 @@
+# v0.5.56 (2026-08-14)
+
+## Fixes
+- Rebuild Next.js UI to sync version display (UI showed stale 0.5.54 after bump to 0.5.55).
+
 # v0.5.55 (2026-08-14)
 
 ## Changes
