@@ -1,3 +1,11 @@
+# v0.5.58 (2026-08-14)
+
+## Features
+- **CodeBuddy Global**: add `glm-5.3` model (1M ctx, 131K out, text-only, coding+cybersecurity focus). Added to medium→max upgrade list.
+
+## Fixes
+- **CodeBuddy Global quota tracker**: port official refill/bonus model from decolua/9router. Fixes "Other Credits" bug where remaining stayed at 100 after credits were fully consumed — root cause was reading stale `CapacityRemain*` fields instead of deriving `remaining = total - used`. Now classifies packs as refill (recurring, Cycle* fields, "Resets in") vs bonus (one-shot, Capacity* fields, "Expires in").
+
 # v0.5.57 (2026-08-14)
 
 ## Fixes

@@ -1,297 +1,139 @@
+/**
+ * CodeBuddy Global (www.codebuddy.ai) usage handler.
+ *
+ * Ported from the official decolua/9router unified codebuddy handler: the same
+ * refill-vs-bonus classification, the same Cycle and Capacity field split, and
+ * the same recurring flag so the UI shows "Resets in" vs "Expires in".
+ *
+ * The previous implementation grouped accounts by hardcoded PackageCode and
+ * read CapacityRemain* for the remaining value. Tencent's billing API does not
+ * update CapacityRemain* in real-time for bonus/expired packs (it stays at the
+ * original quota), so "Other Credits" showed remaining=100 even when the pack
+ * was fully consumed. The official model never reads Remain fields — it only
+ * uses used + total and derives remaining = total - used, which is always
+ * correct regardless of which credit type the account represents.
+ */
+
 import { proxyAwareFetch } from "../../utils/proxyFetch.js";
-import { parseResetTime } from "./shared.js";
+import { PROVIDERS } from "../../providers/index.js";
+import { U, parseResetTime } from "./shared.js";
 
-const CODEBUDDY_CONFIG = {
-  usageUrl: "https://www.codebuddy.ai/v2/billing/meter/get-user-resource",
-  productCode: "p_tcaca",
-  packageCodes: {
-    free: "TCACA_code_001_PqouKr6QWV",
-    proMon: "TCACA_code_002_AkiJS3ZHF5",
-    gift: "TCACA_code_006_DbXS0lrypC",
-    activity: "TCACA_code_007_nzdH5h4Nl0",
-    proYear: "TCACA_code_003_FAnt7lcmRT",
-    freeMon: "TCACA_code_008_cfWoLwvjU4",
-    extra: "TCACA_code_009_0XmEQc2xOf",
-  },
-};
+const PROVIDER_ID = "codebuddy";
 
-async function fetchCodeBuddyUid(accessToken, providerSpecificData = {}, proxyOptions = null) {
-  const cachedUid = providerSpecificData?.uid || providerSpecificData?.rawAuth?.uid;
-  if (cachedUid) {
-    return {
-      uid: cachedUid,
-      enterpriseId: providerSpecificData?.enterpriseId || providerSpecificData?.rawAuth?.enterpriseId || null,
-    };
+// Prefer the *Precise string fields (exact), fall back to the numeric ones.
+function num(precise, plain) {
+  const n = Number(precise ?? plain);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Label a refill pack by its cycle length (Monthly is the common CodeBuddy case).
+function refillCadence(acc) {
+  const start = parseResetTime(acc.CycleStartTime);
+  const end = parseResetTime(acc.CycleEndTime);
+  if (start && end) {
+    const days = (new Date(end).getTime() - new Date(start).getTime()) / 86400000;
+    if (days <= 1.5) return "Daily";
+    if (days <= 10) return "Weekly";
   }
-
-  const domain = providerSpecificData?.domain || providerSpecificData?.rawAuth?.domain || "www.codebuddy.ai";
-  try {
-    const response = await proxyAwareFetch(`https://${domain}/v2/plugin/accounts`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-        "X-Domain": domain,
-      },
-    }, proxyOptions);
-
-    if (!response.ok) return { uid: null, enterpriseId: null };
-
-    const body = await response.json();
-    const accounts = body?.data?.accounts || [];
-    const account = accounts.find((entry) => entry.lastLogin) || accounts[0] || {};
-    return {
-      uid: account.uid || null,
-      enterpriseId: account.enterpriseId || null,
-    };
-  } catch {
-    return { uid: null, enterpriseId: null };
-  }
+  return "Monthly";
 }
 
 export async function getCodeBuddyUsage(accessToken, providerSpecificData = {}, proxyOptions = null, apiKey = null) {
-  if (!accessToken && !apiKey) {
-    return {
-      plan: "CodeBuddy",
-      message: "CodeBuddy upstream quota is unavailable because no valid IDE OAuth token is stored.",
-      quotas: {},
-      trackingMode: "unavailable",
-    };
+  const token = accessToken || apiKey;
+  if (!token) {
+    return { message: "CodeBuddy credential not available." };
   }
 
   try {
-    let uid = null;
-    let enterpriseId = null;
-    let authToken = accessToken;
-
-    if (accessToken) {
-      const identity = await fetchCodeBuddyUid(accessToken, providerSpecificData, proxyOptions);
-      uid = identity.uid;
-      enterpriseId = identity.enterpriseId;
-    } else {
-      authToken = apiKey;
-    }
-
-    const response = await proxyAwareFetch(CODEBUDDY_CONFIG.usageUrl, {
+    const response = await proxyAwareFetch(U(PROVIDER_ID).url, {
       method: "POST",
-      headers: buildCodeBuddyUsageHeaders(authToken, providerSpecificData, uid, enterpriseId),
-      body: JSON.stringify(buildCodeBuddyUsageBody()),
+      headers: {
+        ...(PROVIDERS[PROVIDER_ID]?.headers || {}),
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: "{}",
     }, proxyOptions);
 
-    const rawText = await response.text();
-    let payload = null;
-    try {
-      payload = rawText ? JSON.parse(rawText) : null;
-    } catch {
-      payload = null;
-    }
-
     if (response.status === 401 || response.status === 403) {
-      return {
-        plan: "CodeBuddy",
-        message: `CodeBuddy credential was rejected (${response.status}).`,
-        quotas: {},
-        authMode: accessToken ? "oauth-rejected" : "apikey-rejected",
-        trackingMode: "local-router",
-      };
+      return { message: "CodeBuddy credential invalid or expired." };
     }
-
     if (!response.ok) {
-      return {
-        plan: "CodeBuddy",
-        message: `CodeBuddy quota endpoint returned ${response.status}.`,
-        quotas: {},
-      };
+      return { message: `CodeBuddy quota API error (${response.status}).` };
     }
 
-    return {
-      ...parseCodeBuddyUsage(payload),
-      authMode: accessToken ? "oauth" : "apikey",
-    };
-  } catch (error) {
-    return {
-      plan: "CodeBuddy",
-      message: `CodeBuddy connected. Unable to fetch quota: ${error.message}`,
-      quotas: {},
-    };
-  }
-}
-
-function formatCodeBuddyDate(date) {
-  const pad = (value) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-
-function buildCodeBuddyUsageBody() {
-  const now = new Date();
-  const rangeEnd = new Date(now);
-  rangeEnd.setFullYear(rangeEnd.getFullYear() + 101);
-
-  return {
-    PageNumber: 1,
-    PageSize: 200,
-    ProductCode: CODEBUDDY_CONFIG.productCode,
-    Status: [0, 3],
-    PackageEndTimeRangeBegin: formatCodeBuddyDate(now),
-    PackageEndTimeRangeEnd: formatCodeBuddyDate(rangeEnd),
-  };
-}
-
-function buildCodeBuddyUsageHeaders(accessToken, providerSpecificData = {}, uid = null, enterpriseId = null) {
-  const domain = providerSpecificData?.domain || providerSpecificData?.rawAuth?.domain || "www.codebuddy.ai";
-  const headers = {
-    Authorization: `Bearer ${accessToken}`,
-    Accept: "application/json, text/plain, */*",
-    "Accept-Language": "zh-CN,zh;q=0.9",
-    "Content-Type": "application/json",
-    "X-Domain": domain,
-    "User-Agent": "CLI/2.105.2 CodeBuddy/2.105.2",
-    "X-Product": "SaaS",
-    "X-IDE-Type": "CLI",
-    "X-IDE-Name": "CLI",
-    "x-codebuddy-request": "1",
-    "x-requested-with": "XMLHttpRequest",
-  };
-
-  if (uid) headers["X-User-Id"] = uid;
-  if (enterpriseId) {
-    headers["X-Enterprise-Id"] = enterpriseId;
-    headers["X-Tenant-Id"] = enterpriseId;
-  }
-
-  return headers;
-}
-
-function parseCodeBuddyUsage(payload) {
-  const data = payload?.data?.Response?.Data || payload?.Response?.Data || payload?.data || payload || {};
-  const accounts = Array.isArray(data?.Accounts)
-    ? data.Accounts
-    : Array.isArray(data?.accounts)
-      ? data.accounts
-      : [];
-
-  if (accounts.length === 0) {
-    return {
-      plan: "CodeBuddy",
-      message: "CodeBuddy connected. No quota records were returned.",
-      quotas: {},
-    };
-  }
-
-  const quotas = {};
-  let hasProPackage = false;
-
-  for (const account of accounts) {
-    if (!account || typeof account !== "object") continue;
-    const label = getCodeBuddyQuotaLabel(account.PackageCode);
-    if (!label) continue;
-
-    if (account.PackageCode === CODEBUDDY_CONFIG.packageCodes.proMon || account.PackageCode === CODEBUDDY_CONFIG.packageCodes.proYear) {
-      hasProPackage = true;
+    const json = await response.json();
+    if (json?.code !== 0) {
+      return { message: `CodeBuddy quota error: ${json?.msg || "unknown"}` };
     }
 
-    const quota = getCodeBuddyQuotaValues(account);
-    if (!quota) continue;
+    const data = json?.data?.Response?.Data || {};
+    const accounts = Array.isArray(data.Accounts) ? data.Accounts : [];
+    if (accounts.length === 0) {
+      return { message: "CodeBuddy connected. No credit package found." };
+    }
 
-    if (!quotas[label]) {
-      quotas[label] = {
-        used: 0,
-        total: 0,
-        remaining: 0,
-        resetAt: null,
-        unit: "credits",
+    const cycleEndMs = (acc) => {
+      const r = parseResetTime(acc.CycleEndTime);
+      return r ? new Date(r).getTime() : Number.POSITIVE_INFINITY;
+    };
+    // Refill packs roll into a new cycle before the resource expires; bonus packs
+    // end exactly at expiry. >2d gap between cycle end and validity end = refill.
+    const REFILL_GAP_MS = 2 * 24 * 60 * 60 * 1000;
+    const isRefill = (acc) => {
+      const ce = cycleEndMs(acc);
+      const de = Number(acc.DeductionEndTime);
+      return Number.isFinite(ce) && Number.isFinite(de) && de - ce > REFILL_GAP_MS;
+    };
+    const byExpiry = (a, b) => cycleEndMs(a) - cycleEndMs(b);
+
+    const refills = accounts.filter(isRefill).sort(byExpiry);
+    const bonuses = accounts.filter((a) => !isRefill(a)).sort(byExpiry);
+
+    const quotas = {};
+    // Refill packs first: cadence-labelled, using the *Cycle* balance and
+    // resetting at the next refresh.
+    const seenRefill = {};
+    refills.forEach((acc) => {
+      const base = refillCadence(acc);
+      seenRefill[base] = (seenRefill[base] || 0) + 1;
+      const name = seenRefill[base] > 1 ? `${base} ${seenRefill[base]}` : base;
+      const used = num(acc.CycleCapacityUsedPrecise, acc.CycleCapacityUsed);
+      const total = num(acc.CycleCapacitySizePrecise, acc.CycleCapacitySize);
+      quotas[name] = {
+        used,
+        total,
+        remaining: Math.max(0, total - used),
+        resetAt: parseResetTime(acc.CycleEndTime),
         unlimited: false,
+        // Recurring allowance: the CycleEndTime is the next refresh, not the
+        // final expiry. The UI must show "Resets in", not "Expires in".
+        recurring: true,
       };
-    }
+    });
+    // Bonus packs: use the lifetime Capacity balance; resetAt is the expiry.
+    // These are one-shot credits (CycleEndTime == DeductionEndTime), so they
+    // never replenish — mark recurring:false so the UI shows "Expires in"
+    // instead of implying a monthly refill.
+    bonuses.forEach((acc, i) => {
+      const used = num(acc.CapacityUsedPrecise, acc.CapacityUsed);
+      const total = num(acc.CapacitySizePrecise, acc.CapacitySize);
+      quotas[`Bonus Pack ${i + 1}`] = {
+        used,
+        total,
+        remaining: Math.max(0, total - used),
+        resetAt: parseResetTime(acc.CycleEndTime),
+        unlimited: false,
+        recurring: false,
+      };
+    });
 
-    quotas[label].used += quota.used;
-    quotas[label].total += quota.total;
-    quotas[label].remaining += quota.remaining;
-    quotas[label].resetAt = getEarlierReset(quotas[label].resetAt, quota.resetAt);
+    const basePkg = refills[0] || accounts[0] || {};
+    const plan = basePkg.PackageName || basePkg.SubProductName || "CodeBuddy";
+
+    return { plan, quotas };
+  } catch (error) {
+    return { message: `CodeBuddy error: ${error.message}` };
   }
-
-  if (Object.keys(quotas).length === 0) {
-    return {
-      plan: hasProPackage ? "Pro" : "Free",
-      message: "CodeBuddy connected. Unable to extract quota values.",
-      quotas: {},
-    };
-  }
-
-  for (const quota of Object.values(quotas)) {
-    quota.remainingPercentage = quota.total > 0
-      ? Math.max(0, Math.min(100, (quota.remaining / quota.total) * 100))
-      : 0;
-  }
-
-  return {
-    plan: hasProPackage ? "Pro" : "Free",
-    quotas,
-  };
-}
-
-function getCodeBuddyQuotaLabel(packageCode) {
-  const codes = CODEBUDDY_CONFIG.packageCodes;
-  switch (packageCode) {
-    case codes.free:
-    case codes.freeMon:
-    case codes.proMon:
-    case codes.proYear:
-      return "Monthly Credits";
-    case codes.gift:
-      return "Gift Credits";
-    case codes.extra:
-      return "Extra Credits";
-    case codes.activity:
-      return "Activity Credits";
-    default:
-      return packageCode ? "Other Credits" : null;
-  }
-}
-
-function getCodeBuddyQuotaValues(account) {
-  const total = firstFiniteNumber(
-    account.CycleCapacitySizePrecise,
-    account.CycleCapacitySize,
-    account.CapacitySizePrecise,
-    account.CapacitySize,
-  );
-  const remaining = firstFiniteNumber(
-    account.CycleCapacityRemainPrecise,
-    account.CapacityRemainPrecise,
-    account.CapacityRemain,
-  );
-  const used = firstFiniteNumber(
-    account.CapacityUsedPrecise,
-    account.CapacityUsed,
-    total !== null && remaining !== null ? Math.max(0, total - remaining) : null,
-  );
-
-  if (total === null && remaining === null && used === null) return null;
-
-  const safeTotal = Math.max(0, total ?? ((used ?? 0) + (remaining ?? 0)));
-  const safeRemaining = Math.max(0, remaining ?? Math.max(0, safeTotal - (used ?? 0)));
-  const safeUsed = Math.max(0, used ?? Math.max(0, safeTotal - safeRemaining));
-
-  return {
-    total: safeTotal,
-    remaining: safeRemaining,
-    used: safeUsed,
-    resetAt: parseResetTime(account.CycleEndTime || account.DeductionEndTime || account.ExpiredTime),
-  };
-}
-
-function firstFiniteNumber(...values) {
-  for (const value of values) {
-    if (value === null || value === undefined || value === "") continue;
-    const number = Number(value);
-    if (Number.isFinite(number)) return number;
-  }
-  return null;
-}
-
-function getEarlierReset(current, next) {
-  if (!current) return next || null;
-  if (!next) return current;
-  return new Date(next).getTime() < new Date(current).getTime() ? next : current;
 }

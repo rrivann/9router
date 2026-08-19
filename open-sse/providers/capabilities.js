@@ -169,6 +169,8 @@ export const PROVIDER_CAPABILITIES = {
     "gemini-3.1-flash-lite": { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 200000, maxOutput: 65536 },
     "gemini-2.5-pro":      { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 400000, maxOutput: 64000 },
     "deepseek-v3-0324":    { reasoning: true, thinkingFormat: "openai", contextWindow: 128000, maxOutput: 8192 },
+    // GLM-5.3: 743B base model, coding + cybersecurity focus. Same context/output as 5.2.
+    "glm-5.3":             { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
     // GLM-5.2: 1M context, max output 131k (Zhipuai Coding Plan spec). Text-only reasoning model (no vision).
     "glm-5.2":             { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
     "glm-5.0":             { reasoning: true, thinkingFormat: "openai", contextWindow: 200000, maxOutput: 48000 },
