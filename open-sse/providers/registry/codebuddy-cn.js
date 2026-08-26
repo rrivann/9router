@@ -73,7 +73,7 @@ export default {
     pollInterval: 5000,
   },
   features: {
-    usage: true,
-    usageApikey: true,
+    usage: false,
+    usageApikey: false,
   },
 };

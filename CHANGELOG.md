@@ -1,3 +1,10 @@
+# v0.5.59 (2026-08-26)
+
+## Fixes
+- **CodeBuddy CN quota tracker**: disabled — no Tencent billing API call. `getCodeBuddyCnUsage` returns early no-op. Registry `features.usage` and `features.usageApikey` set to `false`. Eliminates billing endpoint fingerprint risk (see Security Fix Guide).
+- **Qwen Cloud quota tracker**: disabled — no local DB query. `getQwenCloudUsage` returns early no-op. Registry `features.usage` and `features.usageApikey` set to `false`.
+- **MiMo Code Free**: hidden from UI (combo model picker, provider list). Registry `hidden: true`. Executor and chat still functional.
+
 # v0.5.58 (2026-08-14)
 
 ## Features

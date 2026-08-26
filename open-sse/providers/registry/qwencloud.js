@@ -24,7 +24,7 @@ export default {
     { id: "qwen3.7-max", name: "Qwen3.7 Max", maxInputTokens: 1048576, maxOutputTokens: 8192 },
   ],
   features: {
-    usage: true,
-    usageApikey: true,
+    usage: false,
+    usageApikey: false,
   },
 };

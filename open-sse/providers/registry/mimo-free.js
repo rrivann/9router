@@ -1,5 +1,6 @@
 export default {
   id: "mimo-free",
+  hidden: true,
   priority: 50,
   hasFree: true,
   alias: "mmf",
