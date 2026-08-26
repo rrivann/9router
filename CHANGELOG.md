@@ -1,3 +1,8 @@
+# v0.5.60 (2026-08-26)
+
+## Fixes
+- **MiMo Code Free**: filter `hidden` providers from combo model picker. Registry `hidden: true` now actually hides provider from `ModelSelectModal` (previously `byCategory` in `providers.js` did not filter hidden entries, so `mimo-free` appeared in combo picker despite being marked hidden).
+
 # v0.5.59 (2026-08-26)
 
 ## Fixes

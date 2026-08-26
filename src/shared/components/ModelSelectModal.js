@@ -145,17 +145,20 @@ export default function ModelSelectModal({
       : NO_AUTH_PROVIDER_IDS;
 
     // Only show connected providers (including both standard and custom)
+    // Skip providers marked hidden in registry (e.g. mimo-free, mmf)
     const providerIdsToShow = new Set([
       ...activeConnectionIds,  // Only connected providers
       ...noAuthIds,            // No-auth providers (kind-filtered)
     ]);
 
     // Sort by PROVIDER_ORDER
-    const sortedProviderIds = [...providerIdsToShow].sort((a, b) => {
-      const indexA = PROVIDER_ORDER.indexOf(a);
-      const indexB = PROVIDER_ORDER.indexOf(b);
-      return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
-    });
+    const sortedProviderIds = [...providerIdsToShow]
+      .filter((id) => !allProviders[id]?.hidden)
+      .sort((a, b) => {
+        const indexA = PROVIDER_ORDER.indexOf(a);
+        const indexB = PROVIDER_ORDER.indexOf(b);
+        return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+      });
 
     sortedProviderIds.forEach((providerId) => {
       const alias = getProviderAlias(providerId);
