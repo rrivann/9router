@@ -171,6 +171,8 @@ export const PROVIDER_CAPABILITIES = {
     "deepseek-v3-0324":    { reasoning: true, thinkingFormat: "openai", contextWindow: 128000, maxOutput: 8192 },
     // GLM-5.3: 743B base model, coding + cybersecurity focus. Same context/output as 5.2.
     "glm-5.3":             { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
+    // GLM-5.3-Flash: 320B total (18B activated), native multimodal, hybrid sparse+linear attention. 3× cheaper than 5.3.
+    "glm-5.3-flash":       { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
     // GLM-5.2: 1M context, max output 131k (Zhipuai Coding Plan spec). Text-only reasoning model (no vision).
     "glm-5.2":             { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
     "glm-5.0":             { reasoning: true, thinkingFormat: "openai", contextWindow: 200000, maxOutput: 48000 },
@@ -182,6 +184,7 @@ export const PROVIDER_CAPABILITIES = {
   },
   "codebuddy-cn": {
     "glm-5.3":            { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
+    "glm-5.3-flash":     { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
     "glm-5.2":            { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 131072 },
     "glm-5.1":            { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 200000, maxOutput: 48000 },
     "glm-5.0":            { reasoning: true, thinkingFormat: "openai", contextWindow: 200000, maxOutput: 48000 },

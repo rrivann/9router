@@ -1,3 +1,12 @@
+# v0.5.61 (2026-08-27)
+
+## Features
+- **GLM-5.3-Flash**: add to CodeBuddy CN + CodeBuddy Global registries. Native multimodal (vision), 320B total (18B activated), 1M context, 131K output, hybrid sparse+linear attention. Thinking cannot be disabled. Added to medium→max upgrade list. CodeBuddy Global variant does NOT strip image/audio (vision enabled).
+
+## Fixes (backported from official decolua/9router)
+- **Empty tool_calls**: `openai-responses.js` response translator — empty `tool_calls: []` array is truthy in JS, caused `closeMessage()` to fire prematurely and truncate the stream. Now requires `.length` check.
+- **prompt_cache_key lost**: `openai-responses.js` request translator — `prompt_cache_key` was not forwarded when converting Chat Completions → Responses format, causing cache misses and 2-10x cost inflation. Now preserved.
+
 # v0.5.60 (2026-08-26)
 
 ## Fixes

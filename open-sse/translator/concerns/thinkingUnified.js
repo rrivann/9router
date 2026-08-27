@@ -231,7 +231,9 @@ const OPENAI_MEDIUM_TO_MAX_UPGRADES = new Set([
   "codebuddy:claude-opus-5",
   "codebuddy:claude-opus-4.7-1m",
   "codebuddy:glm-5.3",
+  "codebuddy:glm-5.3-flash",
   "codebuddy-cn:glm-5.3",
+  "codebuddy-cn:glm-5.3-flash",
   "codebuddy-cn:glm-5.2",
 ]);
 
