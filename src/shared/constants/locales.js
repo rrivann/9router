@@ -22,7 +22,6 @@ export const LOCALE_FLAGS = {
   "tl": "🇵🇭",
   "id": "🇮🇩",
   "th": "🇹🇭",
-  "km": "🇰🇭",
   "hi": "🇮🇳",
   "bn": "🇧🇩",
   "ur": "🇵🇰",

@@ -41,10 +41,11 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
   }, [initialStatus]);
 
   useEffect(() => {
-    if (isExpanded) {
-      if (!status) checkStatus();
+    if (isExpanded && !status) {
+      checkStatus();
       fetchModelAliases();
     }
+    if (isExpanded) fetchModelAliases();
   }, [isExpanded]);
 
   // Sync models from existing config
@@ -221,7 +222,7 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
       <div className="flex items-start justify-between gap-3 hover:cursor-pointer sm:items-center" onClick={onToggle}>
         <div className="flex min-w-0 items-center gap-3">
           <div className="size-8 flex items-center justify-center shrink-0">
-            <Image src="/providers/opencode.png" alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} loading="lazy" decoding="async" />
+            <Image src="/providers/opencode.png" alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} />
           </div>
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -451,46 +452,42 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
         </div>
       )}
 
-      {modalOpen && (
-        <ModelSelectModal
-          isOpen={modalOpen}
-          onClose={() => {
-            setModalOpen(false);
-            saveModels(selectedModelsRef.current);
-          }}
-          onSelect={(model) => {
-            if (!selectedModels.includes(model.value)) {
-              setSelectedModels([...selectedModels, model.value]);
-              if (!activeModel) setActiveModel(model.value);
-            }
-          }}
-          onDeselect={(model) => {
-            const remaining = selectedModels.filter(m => m !== model.value);
-            setSelectedModels(remaining);
-            if (activeModel === model.value) {
-              setActiveModel(remaining[0] || "");
-            }
-          }}
-          selectedModel={null}
-          activeProviders={activeProviders}
-          modelAliases={modelAliases}
-          addedModelValues={selectedModels}
-          closeOnSelect={false}
-          title="Add Model for OpenCode"
-        />
-      )}
+      <ModelSelectModal
+        isOpen={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          saveModels(selectedModelsRef.current);
+        }}
+        onSelect={(model) => {
+          if (!selectedModels.includes(model.value)) {
+            setSelectedModels([...selectedModels, model.value]);
+            if (!activeModel) setActiveModel(model.value);
+          }
+        }}
+        onDeselect={(model) => {
+          const remaining = selectedModels.filter(m => m !== model.value);
+          setSelectedModels(remaining);
+          if (activeModel === model.value) {
+            setActiveModel(remaining[0] || "");
+          }
+        }}
+        selectedModel={null}
+        activeProviders={activeProviders}
+        modelAliases={modelAliases}
+        addedModelValues={selectedModels}
+        closeOnSelect={false}
+        title="Add Model for OpenCode"
+      />
 
-      {subagentModalOpen && (
-        <ModelSelectModal
-          isOpen={subagentModalOpen}
-          onClose={() => setSubagentModalOpen(false)}
-          onSelect={(model) => { setSubagentModel(model.value); setSubagentModalOpen(false); }}
-          selectedModel={subagentModel}
-          activeProviders={activeProviders}
-          modelAliases={modelAliases}
-          title="Select Subagent Model for OpenCode"
-        />
-      )}
+      <ModelSelectModal
+        isOpen={subagentModalOpen}
+        onClose={() => setSubagentModalOpen(false)}
+        onSelect={(model) => { setSubagentModel(model.value); setSubagentModalOpen(false); }}
+        selectedModel={subagentModel}
+        activeProviders={activeProviders}
+        modelAliases={modelAliases}
+        title="Select Subagent Model for OpenCode"
+      />
 
       <ManualConfigModal
         isOpen={showManualConfigModal}

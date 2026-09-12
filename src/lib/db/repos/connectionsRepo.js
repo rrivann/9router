@@ -86,6 +86,32 @@ export async function getProviderConnectionById(id) {
   return rowToConn(row);
 }
 
+// Health-state keys that linger after a connection recovers. Re-testing a
+// connection (testStatus → "active") used to leave these behind: the routing
+// engine kept skipping the account while the dashboard showed it healthy.
+const MODEL_LOCK_PREFIX = "modelLock_";
+
+/** Clear stale punishment state when a connection is (re-)validated as active. */
+function resetHealthStateOnActivation(existing, patch) {
+  if (patch?.testStatus !== "active") return patch;
+
+  const normalized = {
+    ...patch,
+    testStatus: "active",
+    lastError: Object.hasOwn(patch, "lastError") ? patch.lastError : null,
+    lastErrorAt: Object.hasOwn(patch, "lastErrorAt") ? patch.lastErrorAt : null,
+    errorCode: null,
+    rateLimitedUntil: null,
+    backoffLevel: 0,
+  };
+
+  for (const key of Object.keys(existing || {})) {
+    if (key.startsWith(MODEL_LOCK_PREFIX)) normalized[key] = null;
+  }
+
+  return normalized;
+}
+
 // Internal sync reorder — must be called INSIDE a transaction
 function reorderInTx(db, providerId) {
   const list = db.all(`SELECT * FROM providerConnections WHERE provider = ?`, [providerId]).map(rowToConn);
@@ -147,7 +173,8 @@ export async function createProviderConnection(data) {
     // access_token: never dedup — user manages duplicates manually
 
     if (existing) {
-      const merged = { ...existing, ...data, updatedAt: now };
+      const normalized = resetHealthStateOnActivation(existing, data);
+      const merged = { ...existing, ...normalized, updatedAt: now };
       upsert(db, merged);
       result = merged;
       return;
@@ -218,7 +245,8 @@ export async function updateProviderConnection(id, data) {
     const row = db.get(`SELECT * FROM providerConnections WHERE id = ?`, [id]);
     if (!row) { result = null; return; }
     const existing = rowToConn(row);
-    const merged = { ...existing, ...data, updatedAt: new Date().toISOString() };
+    const normalized = resetHealthStateOnActivation(existing, data);
+    const merged = { ...existing, ...normalized, updatedAt: new Date().toISOString() };
     upsert(db, merged);
     if (data.priority !== undefined) reorderInTx(db, existing.provider);
     result = merged;

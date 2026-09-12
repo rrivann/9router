@@ -143,8 +143,6 @@ export default function MitmToolCard({
                 className="size-8 object-contain rounded-lg"
                 sizes="32px"
                 onError={(e) => { e.target.style.display = "none"; }}
-              loading="lazy"
-              decoding="async"
               />
             </div>
             <div className="min-w-0">
@@ -306,17 +304,15 @@ export default function MitmToolCard({
       )}
 
       {/* Model Select Modal */}
-      {modalOpen && (
-        <ModelSelectModal
-          isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
-          onSelect={handleModelSelect}
-          selectedModel={currentEditingAlias ? modelMappings[currentEditingAlias] : null}
-          activeProviders={activeProviders}
-          modelAliases={modelAliases}
-          title={`Select model for ${currentEditingAlias}`}
-        />
-      )}
+      <ModelSelectModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSelect={handleModelSelect}
+        selectedModel={currentEditingAlias ? modelMappings[currentEditingAlias] : null}
+        activeProviders={activeProviders}
+        modelAliases={modelAliases}
+        title={`Select model for ${currentEditingAlias}`}
+      />
     </>
   );
 }

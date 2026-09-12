@@ -58,10 +58,11 @@ export default function DeepSeekTuiToolCard({
   }, [initialStatus]);
 
   useEffect(() => {
-    if (isExpanded) {
-      if (!deepseekStatus) checkStatus();
+    if (isExpanded && !deepseekStatus) {
+      checkStatus();
       fetchModelAliases();
     }
+    if (isExpanded) fetchModelAliases();
   }, [isExpanded]);
 
   const fetchModelAliases = async () => {
@@ -186,7 +187,7 @@ model = "${selectedModel || "provider/model-id"}"
       <div className="flex items-start justify-between gap-3 hover:cursor-pointer sm:items-center" onClick={onToggle}>
         <div className="flex min-w-0 items-center gap-3">
           <div className="size-8 flex items-center justify-center shrink-0">
-            <Image src={tool.image || "/providers/deepseek-tui.png"} alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} loading="lazy" decoding="async" />
+            <Image src={tool.image || "/providers/deepseek-tui.png"} alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} />
           </div>
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -316,17 +317,15 @@ model = "${selectedModel || "provider/model-id"}"
         </div>
       )}
 
-      {modalOpen && (
-        <ModelSelectModal
-          isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
-          onSelect={handleModelSelect}
-          selectedModel={selectedModel}
-          activeProviders={activeProviders}
-          modelAliases={modelAliases}
-          title="Select Model for DeepSeek TUI"
-        />
-      )}
+      <ModelSelectModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSelect={handleModelSelect}
+        selectedModel={selectedModel}
+        activeProviders={activeProviders}
+        modelAliases={modelAliases}
+        title="Select Model for DeepSeek TUI"
+      />
 
       <ManualConfigModal
         isOpen={showManualConfigModal}

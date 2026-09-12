@@ -30,10 +30,11 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
   }, [initialStatus]);
 
   useEffect(() => {
-    if (isExpanded) {
-      if (!status) checkStatus();
+    if (isExpanded && !status) {
+      checkStatus();
       fetchModelAliases();
     }
+    if (isExpanded) fetchModelAliases();
   }, [isExpanded]);
 
   useEffect(() => {
@@ -156,7 +157,7 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
       <div className="flex items-start justify-between gap-3 hover:cursor-pointer sm:items-center" onClick={onToggle}>
         <div className="flex min-w-0 items-center gap-3">
           <div className="size-8 flex items-center justify-center shrink-0">
-            <Image src="/providers/cline.png" alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} loading="lazy" decoding="async" />
+            <Image src="/providers/cline.png" alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} />
           </div>
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -279,17 +280,15 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
         </div>
       )}
 
-      {modalOpen && (
-        <ModelSelectModal
-          isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
-          onSelect={(model) => { setSelectedModel(model.value); setModalOpen(false); }}
-          selectedModel={selectedModel}
-          activeProviders={activeProviders}
-          modelAliases={modelAliases}
-          title="Select Model for Cline"
-        />
-      )}
+      <ModelSelectModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSelect={(model) => { setSelectedModel(model.value); setModalOpen(false); }}
+        selectedModel={selectedModel}
+        activeProviders={activeProviders}
+        modelAliases={modelAliases}
+        title="Select Model for Cline"
+      />
 
       <ManualConfigModal
         isOpen={showManualConfigModal}

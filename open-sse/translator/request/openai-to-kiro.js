@@ -511,10 +511,12 @@ function convertMessages(messages, tools, model) {
  *    Kiro's 2-3 minute server timeout. The suffix is stripped before being
  *    sent upstream.
  *
- * 2. Thinking / reasoning. Detection covers Anthropic-Beta header, Claude API
+ * 2. Thinking / reasoning. Kiro does not accept `thinking.type` or
+ *    `reasoning_effort` natively. The only way to enable reasoning is to
+ *    inject `<thinking_mode>enabled</thinking_mode>` into the user content
+ *    sent upstream. Detection covers Anthropic-Beta header, Claude API
  *    `thinking`, OpenAI `reasoning_effort`, AMP/Cursor magic tags, and model
- *    name hints. Kiro's prompt tags remain for compatibility, while supported
- *    models also receive the same schema-specific effort fields as Kiro CLI.
+ *    name hints.
  */
 export function openaiToKiroRequest(model, body, stream, credentials) {
   const messages = body.messages || [];

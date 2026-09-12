@@ -17,7 +17,7 @@ export default {
     deprecationNotice: "RISK_NOTICE",
   },
   category: "oauth",
-  serviceKinds: ["llm", "image", "webSearch"],
+  serviceKinds: ["llm", "image"],
   transport: {
     baseUrls: [ANTIGRAVITY_IDE_BASE_URL],
     format: "antigravity",
@@ -44,10 +44,6 @@ export default {
     clientSecret: "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",
   },
   models: [
-    { id: "gemini-3.6-flash-high", name: "Gemini 3.6 Flash (High)" },
-    { id: "gemini-3.6-flash-medium", name: "Gemini 3.6 Flash (Medium)" },
-    { id: "gemini-3.6-flash-low", name: "Gemini 3.6 Flash (Low)" },
-    { id: "gemini-3.5-flash-high", name: "Gemini 3.5 Flash (High)" },
     { id: "gemini-3-flash-agent", name: "Gemini 3.5 Flash (High)" },
     { id: "gemini-3.5-flash-low", name: "Gemini 3.5 Flash (Medium)" },
     { id: "gemini-3.5-flash-extra-low", name: "Gemini 3.5 Flash (Low)" },
@@ -78,11 +74,6 @@ export default {
     loadCodeAssistUserAgent: "google-api-nodejs-client/9.15.1",
     loadCodeAssistApiClient: "google-cloud-sdk vscode_cloudshelleditor/0.1",
     refreshLeadMs: 300000,
-  },
-  searchViaChat: {
-    defaultModel: "gemini-2.5-flash",
-    endpoint: `${ANTIGRAVITY_IDE_BASE_URL}/v1internal:generateContent`,
-    freeTier: "Free — Google Search grounding through an Antigravity OAuth account.",
   },
   features: {
     usage: true,

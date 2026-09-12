@@ -368,17 +368,8 @@ export function parseQuotaData(provider, data) {
       case "codex":
         if (data.quotas) {
           Object.entries(data.quotas).forEach(([quotaType, quota]) => {
-            let displayName = quotaType;
-            if (quotaType === "spark_session") displayName = "Spark (5h)";
-            else if (quotaType === "spark_weekly") displayName = "Spark (Weekly)";
-            else if (quotaType === "session") displayName = "5h";
-            else if (quotaType === "weekly") displayName = "Weekly";
-            else if (quotaType === "review_session") displayName = "Review (5h)";
-            else if (quotaType === "review_weekly") displayName = "Review (Weekly)";
-
             normalizedQuotas.push({
-              name: displayName,
-              quotaType,
+              name: quotaType,
               used: quota.used || 0,
               total: quota.total || 0,
               remaining: quota.remaining,
@@ -442,8 +433,6 @@ export function parseQuotaData(provider, data) {
               name,
               used: quota.used || 0,
               total: quota.total || 0,
-              remaining: quota.remaining !== undefined ? quota.remaining : Math.max(0, (quota.total || 100) - (quota.used || 0)),
-              remainingPercentage: quota.remainingPercentage !== undefined ? quota.remainingPercentage : calculatePercentage(quota.used, quota.total),
               resetAt: quota.resetAt || null,
             });
           });
@@ -519,18 +508,6 @@ export function parseQuotaData(provider, data) {
   } catch (error) {
     console.error(`Error parsing quota data for ${provider}:`, error);
     return [];
-  }
-
-  if (provider?.toLowerCase() === "claude") {
-    const CLAUDE_QUOTA_ORDER = {
-      "session (5h)": 0,
-      "weekly (7d)": 1,
-      "weekly fable (7d)": 2,
-      "weekly opus (7d)": 3,
-      "weekly sonnet (7d)": 4,
-    };
-    normalizedQuotas.sort((a, b) => (CLAUDE_QUOTA_ORDER[a.name] ?? 99) - (CLAUDE_QUOTA_ORDER[b.name] ?? 99));
-    return normalizedQuotas;
   }
 
   // Sort quotas according to PROVIDER_MODELS order

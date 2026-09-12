@@ -30,9 +30,16 @@ function processSSEMessage(msg, state) {
   } else if (eventType === "response.completed" || eventType === "response.done") {
     state.status = "completed";
     if (parsed.response?.usage) {
-      state.usage.input_tokens = parsed.response.usage.input_tokens || 0;
-      state.usage.output_tokens = parsed.response.usage.output_tokens || 0;
-      state.usage.total_tokens = parsed.response.usage.total_tokens || 0;
+      const u = parsed.response.usage;
+      state.usage.input_tokens = u.input_tokens || 0;
+      state.usage.output_tokens = u.output_tokens || 0;
+      state.usage.total_tokens = u.total_tokens || 0;
+      // Preserve cache counters — the forced-SSE→JSON handler folds these into
+      // cache-inclusive prompt_tokens; dropping them here would silently
+      // under-report usage for cache-capable Responses upstreams (codex).
+      if (u.cache_read_input_tokens) state.usage.cache_read_input_tokens = u.cache_read_input_tokens;
+      if (u.cache_creation_input_tokens) state.usage.cache_creation_input_tokens = u.cache_creation_input_tokens;
+      if (u.cached_tokens) state.usage.cached_tokens = u.cached_tokens;
     }
   } else if (eventType === "response.failed") {
     state.status = "failed";

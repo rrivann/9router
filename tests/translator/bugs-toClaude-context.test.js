@@ -179,4 +179,25 @@ describe("OpenAI → Claude context mapping", () => {
     expect(assistant.content[1]).toEqual(expect.objectContaining({ type: "tool_use", id: "toolu_1" }));
     expect(assistant.content[0].signature).toBeUndefined();
   });
+
+  // claude.js hasValidContent() — a user message whose content is only an
+  // image (no text block) was filtered out by prepareClaudeRequest's
+  // "drop empty messages" pass, so an image-only turn (e.g. a vision
+  // describe request with no accompanying prompt text in the user message)
+  // produced an empty `messages` array and Anthropic rejected the request
+  // with "messages: at least one message is required".
+  it("user message with only an image is not dropped as empty", () => {
+    const out = T({
+      messages: [
+        { role: "system", content: "Describe the image." },
+        { role: "user", content: [
+          { type: "image_url", image_url: { url: "data:image/png;base64,AAAA" } },
+        ] },
+      ],
+    });
+    expect(out.messages.length, "image-only user message was dropped").toBeGreaterThan(0);
+    expect(out.messages[0].content).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "image" })])
+    );
+  });
 });
