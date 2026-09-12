@@ -17,8 +17,12 @@ export default {
   transport: {
     baseUrl: "https://www.codebuddy.ai/v2/chat/completions",
     forceStream: true,
+    // CodeBuddy global speaks the same unified OpenAI reasoning_effort shape as CN.
+    // Prevents the generic *claude* pattern from routing these models through the
+    // claude-adaptive path (which would clamp xhigh → high in output_config.effort).
+    thinkingFormat: "openai",
     headers: {
-      "User-Agent": "CLI/2.105.2 CodeBuddy/2.105.2",
+      "User-Agent": "CLI/2.108.1 CodeBuddy/2.108.1",
       "X-Product": "SaaS",
       "X-App": "cli",
       "X-Stainless-Runtime": "node",
@@ -27,9 +31,10 @@ export default {
       "X-Stainless-Retry-Count": "0",
       "X-IDE-Type": "CLI",
       "X-IDE-Name": "CLI",
-      "X-IDE-Version": "2.105.2",
+      "X-IDE-Version": "2.108.1",
       "X-Private-Data": "false",
       "X-Requested-With": "XMLHttpRequest",
+      "x-codebuddy-request": "1",
       "X-Domain": "www.codebuddy.ai",
     },
     auth: { combined: true, header: "Authorization", scheme: "bearer" },
@@ -48,6 +53,7 @@ export default {
     { id: "gpt-5.6-sol", name: "GPT-5.6-Sol", maxInputTokens: 1050000, maxOutputTokens: 128000 },
     { id: "gpt-5.6-luna", name: "GPT-5.6-Luna", maxInputTokens: 1050000, maxOutputTokens: 128000 },
     { id: "gpt-5.6-terra", name: "GPT-5.6-Terra", maxInputTokens: 1050000, maxOutputTokens: 128000 },
+    { id: "gpt-6-astra", name: "GPT 6.0 Astra", maxInputTokens: 1050000, maxOutputTokens: 128000 },
     { id: "gpt-5.5", name: "GPT-5.5", maxInputTokens: 1000000, maxOutputTokens: 72000 },
     { id: "gpt-5.4", name: "GPT-5.4", maxInputTokens: 272000, maxOutputTokens: 128000 },
     { id: "gpt-5.3-codex", name: "GPT-5.3-Codex", maxInputTokens: 272000, maxOutputTokens: 128000 },
@@ -59,6 +65,7 @@ export default {
     { id: "gemini-3.1-flash-lite", name: "Gemini-3.1-flash-lite", maxInputTokens: 200000, maxOutputTokens: 65536 },
     { id: "gemini-2.5-pro", name: "Gemini-2.5-Pro", maxInputTokens: 400000, maxOutputTokens: 64000 },
     { id: "deepseek-v3-0324", name: "DeepSeek-V3", maxInputTokens: 128000, maxOutputTokens: 8192, strip: ["image", "audio"] },
+    { id: "deepseek-v4.1-flash", name: "DeepSeek-V4.1-Flash", maxInputTokens: 1000000, maxOutputTokens: 128000 },
     { id: "glm-5.3", name: "GLM-5.3", maxInputTokens: 1000000, maxOutputTokens: 131072, strip: ["image", "audio"] },
     { id: "glm-5.3-flash", name: "GLM-5.3-Flash", maxInputTokens: 1000000, maxOutputTokens: 131072 },
     { id: "glm-5.2", name: "GLM-5.2", maxInputTokens: 1000000, maxOutputTokens: 131072, strip: ["image", "audio"] },
@@ -72,7 +79,7 @@ export default {
     stateUrl: "https://www.codebuddy.ai/v2/plugin/auth/state",
     tokenUrl: "https://www.codebuddy.ai/v2/plugin/auth/token",
     refreshUrl: "https://www.codebuddy.ai/v2/plugin/auth/token/refresh",
-    userAgent: "CLI/2.105.2 CodeBuddy/2.105.2",
+    userAgent: "CLI/2.108.1 CodeBuddy/2.108.1",
     platform: "CLI",
     pollInterval: 5000,
   },

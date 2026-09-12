@@ -1,3 +1,28 @@
+# v0.5.62 (2026-09-12)
+
+## Features
+- **GPT-6 Astra**: add to CodeBuddy Global registry. 1.05M context, 128K output, vision + reasoning + search. Thinking levels: none/minimal/low/medium/high/xhigh/max.
+- **DeepSeek-V4.1-Flash**: add to CodeBuddy Global registry. 1M context, 128K output, vision + reasoning, thinkingCanDisable: true. Server-verified capabilities matching CN.
+- **Thinking pipeline refactor**: `normalizeOpenAILevel()` clamps max/ultra → xhigh when model doesn't support. `extractThinking()` reordered: OpenAI reasoning_effort checked before Claude thinking shape (z.ai sends both). `NATIVE_ONLY_FORMATS` guard prevents non-openai formats from overriding on openai wire. `ultra` level support in `parseSuffix()`.
+- **Provider-scoped thinking levels**: `PATTERN_THINKING` entries support optional `provider` field for scoping. CodeBuddy-CN per-model effort sets from server `supportedEfforts` (glm-5.3*, glm-5.2, deepseek-v4*, hy3*, hy4*).
+
+## Fixes (backported from official decolua/9router)
+- **Claude cache_control 4-marker budget**: cap re-anchored cache_control at Anthropic's 4-marker limit. Over-budget requests now trim instead of forwarding a 5th marker that 400s and locks the entire account pool. Also strips invalid cache_control from defer_loading tools.
+- **Claude server_tool_use foreign ID**: drop `server_tool_use` blocks carrying non-Anthropic IDs (e.g. GLM `call_` IDs) that poison conversation history and trigger 400 rejections. Orphaned `tool_result` blocks referencing dropped IDs are also removed.
+- **Claude defer_loading cache anchor**: never anchor cache breakpoint on `defer_loading: true` tools (#3567). MCP clients put deferred tools at the tail where the anchor lands — now anchors on the last cacheable tool.
+- **Claude single-object content**: wrap bare `content: {block}` as one-element array `[{block}]` before all processing paths. Previously dropped/zeroed conversation turns silently.
+- **Model context marker `[1m]`**: strip `[1m]` suffix from model names (Claude Code 1M-context beta) before resolution. Capability travels in `anthropic-beta` header, forwarded untouched.
+- **IDE version bump**: CodeBuddy Global `CLI/2.105.2` → `CLI/2.108.1` (User-Agent, X-IDE-Version, oauth.userAgent).
+- **`x-codebuddy-request: "1"` header**: add to CodeBuddy Global registry transport headers (CN already had it).
+- **Claude adaptive auto effort**: normalize `output_config.effort: "auto"` → `"high"` instead of forwarding literal `"auto"` that Anthropic 400 rejects (#3792).
+- **Usage nested cached_tokens**: preserve `prompt_tokens_details.cached_tokens` in `canonicalizeUsage()` — previously dropped for Responses-format providers, billing cache hits at full input rate.
+- **Stream disconnect logging**: stop printing "DISCONNECT" for every completed Responses call — Responses API has no `[DONE]` sentinel so clients close the socket normally.
+- **Minimax transport target format**: prefer source-format-matched transport over model's declared targetFormat — MiniMax-M3 on OpenAI wire no longer drops `image_url` blocks (#3418).
+
+## Capabilities corrections (server-verified)
+- **CodeBuddy CN + Global GLM models**: `thinkingCanDisable: false` → `true` (glm-5.3, glm-5.3-flash, glm-5.2). `maxOutput: 131072` → `48000/32000` (server maxOutputTokens, not Zhipuai spec). `vision: missing` → `true` (server supportsImages). `glm-5v-turbo maxOutput: 38000` → `64000`. `minimax-m3 maxOutput: 48000` → `128000`. `deepseek-v4*: thinkingCanDisable: false` → `true`.
+- **CodeBuddy CN model IDs**: `kimi-k3` → `kimi-k3-1` (server model ID). `deepseek-v4-flash` → `deepseek-v4.1-flash` (server-side replacement, deprecated).
+
 # v0.5.61 (2026-08-27)
 
 ## Features

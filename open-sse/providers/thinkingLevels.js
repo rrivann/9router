@@ -43,17 +43,34 @@ const FORMAT_LEVELS = {
 };
 
 // Model-name pattern overrides (glob, first match wins) — more precise than format default.
+// `provider` field scopes the entry to a single provider; entries without a
+// `provider` field match any provider (global fallback).
 const PATTERN_THINKING = [
-  // gpt-5.6-sol accepts max (maps to xhigh on wire); live probe rejected ultra.
   { pattern: "*gpt-5.6-sol*", levels: ["none", "minimal", "low", "medium", "high", "xhigh", "max"] },
   { pattern: "*codex*", levels: ["low", "medium", "high", "xhigh"] }, // codex cannot disable thinking
+  // GPT-6 Astra: same effort set as GPT-5.6 Sol (accepts max).
+  { pattern: "*gpt-6*", levels: ["none", "minimal", "low", "medium", "high", "xhigh", "max"] },
+  // codebuddy-cn per-model effort sets — the server's product-config payload
+  // publishes `reasoning.supportedEfforts` per model. NOTE: the chat endpoint
+  // accepts any level you send (probed none/minimal/low/medium/high/xhigh/max
+  // → all 200), but values outside a model's supportedEfforts are silently
+  // clamped, so the declared set stays authoritative for the picker. Models
+  // that publish no supportedEfforts (glm-5.1 / glm-5v-turbo / kimi-k2.x /
+  // kimi-k3-1 / minimax-m3) fall through to the openai format default.
+  { provider: "codebuddy-cn", pattern: "glm-5.3*",     levels: ["low", "high", "max"] },
+  { provider: "codebuddy-cn", pattern: "glm-5.2",      levels: ["high", "xhigh"] },
+  { provider: "codebuddy-cn", pattern: "deepseek-v4*", levels: ["low", "high", "xhigh"] },
+  { provider: "codebuddy-cn", pattern: "hy3*",         levels: ["low", "high"] },
+  { provider: "codebuddy-cn", pattern: "hy4*",         levels: ["high"] },
 ];
 
 // Returns valid thinking levels for a model, or null when the model has no reasoning.
 export function getThinkingLevels(provider, model) {
   const caps = getCapabilitiesForModel(provider, model);
   if (!caps.reasoning) return null;
-  const hit = PATTERN_THINKING.find((p) => matchPattern(p.pattern, model));
+  const hit = PATTERN_THINKING.find((entry) =>
+    (!entry.provider || entry.provider === provider) && matchPattern(entry.pattern, model)
+  );
   let levels = hit?.levels || FORMAT_LEVELS[caps.thinkingFormat] || L.base;
   // OpenAI-compat gateways that accept the extended "max" effort (CodeBuddy)
   // still use thinkingFormat:"openai" — expand the level set for those providers.

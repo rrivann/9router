@@ -3,6 +3,7 @@
 // never hardcoded per-model here. See .docs/thinking/plan.md MATRIX VI-A.
 
 import { getCapabilitiesForModel } from "../../providers/capabilities.js";
+import { getThinkingLevels } from "../../providers/thinkingLevels.js";
 import { PROVIDERS } from "../../providers/index.js";
 import { LEVEL_TO_BUDGET, budgetToLevel, effortToBudget, effortToThinkingLevel } from "./thinking.js";
 
@@ -37,7 +38,7 @@ export function parseSuffix(model) {
   const raw = m[2].trim().toLowerCase();
   if (raw === "none" || raw === "off") return { cleanModel, override: { mode: "none" } };
   if (raw === "auto") return { cleanModel, override: { mode: "auto" } };
-  if (/^\d+$/.test(raw)) return { cleanModel, override: { mode: "budget", budget: Number(raw) } };
+  if (raw === "ultra") return { cleanModel, override: { mode: "level", level: raw } };
   if (LEVEL_TO_BUDGET[raw] !== undefined) return { cleanModel, override: { mode: "level", level: raw } };
   return { cleanModel, override: null };
 }
@@ -56,6 +57,15 @@ export function extractThinking(body) {
     return { mode: "level", level: e };
   }
 
+  // OpenAI chat / Responses shape — check effort first (zai sends both thinking object and reasoning.effort)
+  const effort = body.reasoning_effort ?? (typeof body.reasoning === "object" ? body.reasoning?.effort : null);
+  if (typeof effort === "string" && effort) {
+    const e = effort.toLowerCase();
+    if (e === "none" || e === "off") return { mode: "none" };
+    if (e === "auto") return { mode: "auto" };
+    return { mode: "level", level: e };
+  }
+
   // Claude shape
   const t = body.thinking;
   if (t && typeof t === "object") {
@@ -67,14 +77,6 @@ export function extractThinking(body) {
     }
   }
 
-  // OpenAI chat / Responses shape
-  const effort = body.reasoning_effort ?? (typeof body.reasoning === "object" ? body.reasoning?.effort : null);
-  if (typeof effort === "string" && effort) {
-    const e = effort.toLowerCase();
-    if (e === "none" || e === "off") return { mode: "none" };
-    if (e === "auto") return { mode: "auto" };
-    return { mode: "level", level: e };
-  }
 
   // Gemini shape (top-level, generationConfig, or request envelope)
   const tc = body.thinkingConfig || body.generationConfig?.thinkingConfig || body.request?.generationConfig?.thinkingConfig;
@@ -102,13 +104,21 @@ export function extractThinking(body) {
 // Capture thinking intent from a body. Alias of extractThinking, named for clarity
 // at the call-site where intent is snapshotted before format translation.
 export const captureThinking = extractThinking;
+// Formats that are native-only: they must never override the resolved format
+// when the target wire is OpenAI-compatible (e.g. a claude-adaptive capability
+// on an openai wire would force claude-shaped output_config on a non-Claude
+// endpoint). Falls through to FORMAT_TO_NATIVE instead.
+const NATIVE_ONLY_FORMATS = new Set(["gemini-level", "gemini-budget", "claude-budget", "claude-adaptive", "kiro"]);
 
 // Resolve thinking format: provider override > capability > derive(targetFormat).
 function resolveFormat(targetFormat, model, provider) {
   const providerFmt = provider ? PROVIDERS[provider]?.thinkingFormat : null;
   if (providerFmt) return providerFmt;
   const caps = getCapabilitiesForModel(provider, model);
-  if (caps.thinkingFormat) return caps.thinkingFormat;
+  const isOpenAIWire = targetFormat === "openai" || targetFormat === "openai-responses";
+  if (caps.thinkingFormat && !(isOpenAIWire && NATIVE_ONLY_FORMATS.has(caps.thinkingFormat))) {
+    return caps.thinkingFormat;
+  }
   return FORMAT_TO_NATIVE[targetFormat] || "openai";
 }
 
@@ -212,6 +222,15 @@ function stripAll(body) {
   if (body.request?.generationConfig) delete body.request.generationConfig.thinkingConfig;
 }
 
+// Clamp max/ultra to xhigh when the provider/model doesn't support them.
+// ultra → max when max is supported but ultra is not.
+function normalizeOpenAILevel(level, supportedLevels) {
+  if (level !== "max" && level !== "ultra") return level;
+  if (supportedLevels?.includes(level)) return level;
+  if (level === "ultra" && supportedLevels?.includes("max")) return "max";
+  return "xhigh";
+}
+
 // Providers whose OpenAI-compatible gateway accepts "max" as a valid
 // reasoning_effort value. Everyone else caps at "xhigh".
 const OPENAI_MAX_EFFORT_PROVIDERS = new Set(["codebuddy", "codebuddy-cn", "qwencloud"]);
@@ -238,7 +257,7 @@ const OPENAI_MEDIUM_TO_MAX_UPGRADES = new Set([
 ]);
 
 // Apply unified thinking config to body in the resolved provider-native format.
-function applyFormat(fmt, body, cfg, caps, provider = null, model = null) {
+function applyFormat(fmt, body, cfg, caps, supportedLevels, provider = null, model = null) {
   const none = cfg.mode === "none";
   const canDisable = caps.thinkingCanDisable !== false;
   // Model cannot disable thinking → clamp "none" to minimal effort instead.
@@ -248,29 +267,16 @@ function applyFormat(fmt, body, cfg, caps, provider = null, model = null) {
     case "openai": {
       if (none && canDisable) { body.reasoning_effort = "none"; break; }
       let level = toLevel(eff);
-      // OpenAI reasoning_effort enum caps at "xhigh" (no "max") for the public
-      // API. A few OpenAI-compatible upstreams (e.g. CodeBuddy Global) accept
-      // "max" — passthrough there, clamp for everyone else. Some models on those
-      // providers still cap at "xhigh" (see OPENAI_MAX_MODEL_EXCEPTIONS).
-      if (level) {
-        const providerAllowsMax = OPENAI_MAX_EFFORT_PROVIDERS.has(provider)
-          && !OPENAI_MAX_MODEL_EXCEPTIONS.has(`${provider}:${model}`);
-        // Targeted upgrade: on specific provider+model pairs, silently promote
-        // "medium" → "max" so default CLI clients get max reasoning without
-        // needing a model suffix. Other levels pass through unchanged.
-        if (
-          level === "medium"
-          && providerAllowsMax
-          && OPENAI_MEDIUM_TO_MAX_UPGRADES.has(`${provider}:${model}`)
-        ) {
-          level = "max";
-        }
-        if (level === "max" && !providerAllowsMax) {
-          body.reasoning_effort = "xhigh";
-        } else {
-          body.reasoning_effort = level;
-        }
+      // Targeted upgrade: on specific provider+model pairs, silently promote
+      // "medium" → "max" so default CLI clients get max reasoning without
+      // needing a model suffix. Other levels pass through unchanged.
+      if (
+        level === "medium"
+        && OPENAI_MEDIUM_TO_MAX_UPGRADES.has(`${provider}:${model}`)
+      ) {
+        level = "max";
       }
+      if (level) body.reasoning_effort = normalizeOpenAILevel(level, supportedLevels);
       break;
     }
     case "claude-adaptive": {
@@ -282,7 +288,7 @@ function applyFormat(fmt, body, cfg, caps, provider = null, model = null) {
       // Sonnet 5. Send both fields — the documented adaptive-thinking shape.
       body.thinking = { type: "adaptive" };
       const level = toLevel(eff);
-      body.output_config = { effort: level === "xhigh" ? "high" : level };
+      body.output_config = { effort: level === "xhigh" || level === "auto" ? "high" : level };
       break;
     }
     case "claude-budget": {
@@ -375,7 +381,8 @@ export function applyThinking(targetFormat, model, body, provider = null, intent
   if (!cfg) return body;
 
   const fmt = resolveFormat(targetFormat, cleanModel, provider);
+  const supportedLevels = getThinkingLevels(provider, cleanModel);
   stripAll(body);
-  applyFormat(fmt, body, cfg, caps, provider, cleanModel);
+  applyFormat(fmt, body, cfg, caps, supportedLevels, provider, cleanModel);
   return body;
 }
