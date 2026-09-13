@@ -1,4 +1,9 @@
-# v0.5.63 (2026-09-13)
+# v0.5.64 (2026-09-13)
+
+## Notes
+- Republish of v0.5.63 — the earlier version was staged on npm but never completed publication, leaving it burned in the registry. Bumping to skip past it.
+
+# v0.5.63 (2026-09-13) — staged only, not on npm
 
 ## Fixes
 - **CodeBuddy `tool_choice` object → 400 (code 11101)**: CodeBuddy backend types `tool_choice` as `string` only. When client sends an object form (e.g. `{type:"function", function:{name:"X"}}` after -to-openai translation), upstream rejects with `json: cannot unmarshal object into Go struct field Request.tool_choice of type string` and every fallback key gets locked. `codebuddy.js` + `codebuddy-cn.js` now coerce object `tool_choice` to `"required"` in `transformRequest`.
