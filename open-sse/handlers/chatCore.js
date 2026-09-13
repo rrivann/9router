@@ -289,15 +289,66 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     log?.debug?.("PROXY", `${provider.toUpperCase()} | ${model} | conn=${connectionName} | no_proxy=${proxyOptions.connectionNoProxy}`);
   }
 
-  // Execute request
+  // Execute request (with automatic retry on `terminated` / socket-drop errors — Opsi A)
+  // Rationale: undici surfaces upstream half-close / TLS reset as
+  //   TypeError: terminated  (Fetch.onAborted → onError → TLSSocket.onHttpSocketClose)
+  // These are transient network-layer failures, not application errors — the request
+  // never reached upstream logic. Retrying once (or a few times, tunable) recovers
+  // silently instead of bubbling a 502 to the CLI client.
+  const isTerminatedError = (err) => {
+    if (!err) return false;
+    if (err.name === "AbortError") return false;              // user/client abort, don't retry
+    const msg = String(err.message || err || "");
+    const code = err.code || err.cause?.code;
+    return (
+      msg === "terminated" ||
+      msg.includes("terminated") ||
+      msg.includes("socket hang up") ||
+      msg.includes("other side closed") ||
+      code === "UND_ERR_SOCKET" ||
+      code === "UND_ERR_CLOSED" ||
+      code === "ECONNRESET" ||
+      code === "EPIPE"
+    );
+  };
+  const terminatedMaxRetries = (() => {
+    const raw = process.env.TERMINATED_RETRY_MAX;
+    const n = raw ? parseInt(raw, 10) : NaN;
+    return Number.isFinite(n) && n >= 0 && n <= 5 ? n : 2;
+  })();
+  const terminatedBaseDelayMs = (() => {
+    const raw = process.env.TERMINATED_RETRY_DELAY_MS;
+    const n = raw ? parseInt(raw, 10) : NaN;
+    return Number.isFinite(n) && n >= 0 ? n : 500;
+  })();
+
   let providerResponse, providerUrl, providerHeaders, finalBody;
   try {
-    const result = await executor.execute({ model, body: translatedBody, stream, credentials, signal: streamController.signal, log, proxyOptions });
-    providerResponse = result.response;
-    providerUrl = result.url;
-    providerHeaders = result.headers;
-    finalBody = result.transformedBody;
-    reqLogger.logTargetRequest(providerUrl, providerHeaders, finalBody);
+    let attempt = 0;
+    let lastError;
+    while (true) {
+      try {
+        const result = await executor.execute({ model, body: translatedBody, stream, credentials, signal: streamController.signal, log, proxyOptions });
+        providerResponse = result.response;
+        providerUrl = result.url;
+        providerHeaders = result.headers;
+        finalBody = result.transformedBody;
+        reqLogger.logTargetRequest(providerUrl, providerHeaders, finalBody);
+        break;
+      } catch (execError) {
+        lastError = execError;
+        if (attempt < terminatedMaxRetries && isTerminatedError(execError) && !streamController.signal.aborted) {
+          attempt += 1;
+          const delayMs = terminatedBaseDelayMs * attempt; // linear backoff: 500, 1000, 1500ms
+          if (log?.line) {
+            log.line(reqTag, "↻", `RETRY terminated · ${provider}/${model} · attempt=${attempt}/${terminatedMaxRetries} · wait=${delayMs}ms · reason=${execError.message || execError.code || "socket-drop"}`);
+          }
+          await new Promise((r) => setTimeout(r, delayMs));
+          continue;
+        }
+        throw lastError;
+      }
+    }
   } catch (error) {
     trackPendingRequest(model, provider, connectionId, false, true);
     appendRequestLog({ model, provider, connectionId, status: `FAILED ${error.name === "AbortError" ? 499 : HTTP_STATUS.BAD_GATEWAY}` }).catch(() => { });

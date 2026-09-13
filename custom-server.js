@@ -1,5 +1,44 @@
 const http = require("http");
 
+// ─── Undici global dispatcher (Opsi B) ─────────────────────────────────────
+// Belt-and-suspenders alongside `instrumentation.js`. Ensures the process-wide
+// fetch (undici) uses long-tolerant timeouts and short keep-alive so upstream
+// providers that half-close idle sockets can't surface as
+// `TypeError: terminated` mid-stream. Values match instrumentation.js.
+try {
+  const { setGlobalDispatcher, Agent, getGlobalDispatcher } = require("undici");
+  const envInt = (name, fallback) => {
+    const raw = process.env[name];
+    if (raw == null || raw === "") return fallback;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
+  };
+  const headersTimeout = envInt("UNDICI_HEADERS_TIMEOUT_MS", 600_000);
+  const bodyTimeout = envInt("UNDICI_BODY_TIMEOUT_MS", 0);
+  const keepAliveTimeout = envInt("UNDICI_KEEPALIVE_TIMEOUT_MS", 30_000);
+  const keepAliveMaxTimeout = envInt("UNDICI_KEEPALIVE_MAX_MS", 600_000);
+  const connectTimeout = envInt("UNDICI_CONNECT_TIMEOUT_MS", 60_000);
+  const prev = getGlobalDispatcher && getGlobalDispatcher();
+  const isDefaultAgent = !prev || prev.constructor?.name === "Agent";
+  if (isDefaultAgent) {
+    setGlobalDispatcher(new Agent({
+      headersTimeout,
+      bodyTimeout,
+      keepAliveTimeout,
+      keepAliveMaxTimeout,
+      connect: { timeout: connectTimeout },
+    }));
+    // eslint-disable-next-line no-console
+    console.log(
+      `[undici] global dispatcher configured (custom-server) · headers=${headersTimeout}ms body=${bodyTimeout}ms ` +
+      `keepAlive=${keepAliveTimeout}/${keepAliveMaxTimeout}ms connect=${connectTimeout}ms`,
+    );
+  }
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.warn(`[undici] custom-server dispatcher setup skipped: ${err.message}`);
+}
+
 const origCreate = http.createServer.bind(http);
 
 // Wrap Next standalone HTTP server: derive client IP from the TCP socket

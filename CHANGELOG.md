@@ -1,3 +1,9 @@
+# v0.5.63 (2026-09-13)
+
+## Fixes
+- **CodeBuddy `tool_choice` object → 400 (code 11101)**: CodeBuddy backend types `tool_choice` as `string` only. When client sends an object form (e.g. `{type:"function", function:{name:"X"}}` after -to-openai translation), upstream rejects with `json: cannot unmarshal object into Go struct field Request.tool_choice of type string` and every fallback key gets locked. `codebuddy.js` + `codebuddy-cn.js` now coerce object `tool_choice` to `"required"` in `transformRequest`.
+- **Undici `TypeError: terminated` mid-stream**: upstream TLS half-close during long reasoning streams (e.g. `claude-opus-4.7-1m` at `THINK:max`) surfaced as a fatal error to CLI clients instead of a graceful close. `chatCore.js` now auto-retries transient network-layer failures (`terminated`, `socket hang up`, `UND_ERR_SOCKET`, `UND_ERR_CLOSED`, `ECONNRESET`, `EPIPE`) — tunable via `TERMINATED_RETRY_MAX` (default 2) and `TERMINATED_RETRY_DELAY_MS` (default 500ms). `custom-server.js` also configures process-wide undici `Agent` with long headers/body timeouts and short keep-alive, matching `instrumentation.js`.
+
 # v0.5.62 (2026-09-12)
 
 ## Features

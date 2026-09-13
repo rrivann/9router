@@ -21,6 +21,11 @@ export class CodeBuddyExecutor extends DefaultExecutor {
     const transformed = super.transformRequest(model, body, stream, credentials);
     transformed.stream = true;
 
+    // CodeBuddy backend types tool_choice as string only — coerce object form to "required"
+    if (transformed.tool_choice && typeof transformed.tool_choice === "object") {
+      transformed.tool_choice = "required";
+    }
+
     const eff = transformed.reasoning_effort;
     if (eff === "none" || eff === "off") {
       delete transformed.reasoning_effort;

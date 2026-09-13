@@ -107,6 +107,10 @@ export class CodeBuddyGlobalExecutor extends DefaultExecutor {
     for (const field of ALLOWED_FIELDS) {
       if (source[field] !== undefined) transformed[field] = source[field];
     }
+    // CodeBuddy backend types tool_choice as string only — coerce object form to "required"
+    if (transformed.tool_choice && typeof transformed.tool_choice === "object") {
+      transformed.tool_choice = "required";
+    }
     if (Array.isArray(source.tools)) transformed.tools = normalizeTools(source.tools);
     const maxTokens = Number(source.max_tokens ?? source.max_completion_tokens);
     if (Number.isFinite(maxTokens) && maxTokens > 0) transformed.max_tokens = Math.max(maxTokens, 16);
