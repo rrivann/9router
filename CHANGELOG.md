@@ -1,7 +1,9 @@
-# v0.5.64 (2026-09-13)
+# v0.5.65 (2026-09-13)
 
 ## Notes
-- Republish of v0.5.63 — the earlier version was staged on npm but never completed publication, leaving it burned in the registry. Bumping to skip past it.
+- Republish of v0.5.63 fixes. Earlier v0.5.63 and v0.5.64 attempts got stuck as "staged" on npm without completing (auth token missed publish scope). Bumping past both burned versions.
+
+# v0.5.64 (2026-09-13) — staged only, not on npm
 
 # v0.5.63 (2026-09-13) — staged only, not on npm
 
