@@ -198,7 +198,9 @@ export function openaiResponsesToOpenAIRequest(model, body, stream, credentials)
   delete result.input;
   delete result.instructions;
   delete result.include;
-  delete result.prompt_cache_key;
+  // prompt_cache_key stays: upstream Chat-Completions backends that understand it
+  // (e.g. CodeBuddy pass-through to 0penAI) use it to group prompt-cache entries;
+  // backends that don't simply ignore unknown fields.
   delete result.store;
   delete result.reasoning;
   delete result.client_metadata;

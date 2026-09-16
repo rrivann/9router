@@ -1,3 +1,8 @@
+# v0.5.66 (2026-09-16)
+
+## Fixes
+- **CodeBuddy prompt-cache misses (cb/gpt-6-astra)**: `prompt_cache_key` was stripped in the Responses → Chat Completions translation (`openai-responses.js`), and the CodeBuddy Global executor's `ALLOWED_FIELDS` didn't forward it either — so Codex CLI traffic via 9Router could never group into upstream prompt-cache entries and cache hits rarely fired. The key is now preserved end-to-end; `user` and `safety_identifier` are also forwarded as cache-grouping fallbacks. CodeBuddy CN untouched.
+
 # v0.5.65 (2026-09-13)
 
 ## Notes

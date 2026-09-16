@@ -9,6 +9,10 @@ import {
 const ALLOWED_FIELDS = [
   "temperature", "top_p", "presence_penalty", "frequency_penalty", "stop",
   "tool_choice", "parallel_tool_calls", "response_format",
+  // Cache-grouping keys: CodeBuddy pass-through to 0penAI upstream honors these
+  // (prompt_cache_key primary, user/safety_identifier fallback). Without them,
+  // cache hits rarely fire because requests can't be grouped to a stable key.
+  "prompt_cache_key", "user", "safety_identifier",
 ];
 
 const filters = createContentFilterCache("codebuddy");

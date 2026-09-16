@@ -27,7 +27,7 @@ describe("#3216 prompt_cache_key across the chat/responses translation", () => {
     expect(out.prompt_cache_key).toBeUndefined();
   });
 
-  it("still drops the key on the responses → chat direction", () => {
+  it("preserves the key on the responses → chat direction too (CodeBuddy prompt-cache grouping)", () => {
     const out = openaiResponsesToOpenAIRequest(
       "example-model",
       {
@@ -39,6 +39,6 @@ describe("#3216 prompt_cache_key across the chat/responses translation", () => {
       {},
     );
 
-    expect(out.prompt_cache_key).toBeUndefined();
+    expect(out.prompt_cache_key).toBe("stable-cache-key");
   });
 });
