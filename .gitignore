@@ -88,3 +88,5 @@ graphify-out/*
 .codegraph/
 .PR/
 .next-analyze/*
+.codebase-memory/
+.workbuddy-ai/
