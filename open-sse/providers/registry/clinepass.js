@@ -1,5 +1,6 @@
 export default {
   id: "clinepass",
+  hidden: true,
   priority: 85,
   alias: "clinepass",
   uiAlias: "clinepass",

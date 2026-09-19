@@ -1,5 +1,6 @@
 export default {
   id: "anthropic",
+  hidden: true,
   priority: 30,
   alias: "anthropic",
   display: {

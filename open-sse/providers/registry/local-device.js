@@ -1,5 +1,6 @@
 export default {
   id: "local-device",
+  hidden: true,
   alias: "local-device",
   display: {
     name: "Local Device",

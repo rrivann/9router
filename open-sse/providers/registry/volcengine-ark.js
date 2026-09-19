@@ -1,5 +1,6 @@
 export default {
   id: "volcengine-ark",
+  hidden: true,
   priority: 270,
   alias: "volcengine-ark",
   aliases: [

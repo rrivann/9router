@@ -1,5 +1,6 @@
 export default {
   id: "cline",
+  hidden: true,
   priority: 80,
   alias: "cl",
   uiAlias: "cl",

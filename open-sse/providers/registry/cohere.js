@@ -1,5 +1,6 @@
 export default {
   id: "cohere",
+  hidden: true,
   priority: 90,
   alias: "cohere",
   display: {

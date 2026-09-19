@@ -1,5 +1,6 @@
 export default {
   id: "chutes",
+  hidden: true,
   priority: 70,
   alias: "chutes",
   aliases: [

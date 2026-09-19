@@ -1,5 +1,6 @@
 export default {
   id: "alicode-intl",
+  hidden: true,
   priority: 10,
   alias: "alicode-intl",
   display: {

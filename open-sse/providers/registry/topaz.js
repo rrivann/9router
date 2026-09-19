@@ -1,5 +1,6 @@
 export default {
   id: "topaz",
+  hidden: true,
   alias: "topaz",
   display: {
     name: "Topaz",

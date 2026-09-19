@@ -1,5 +1,6 @@
 export default {
   id: "searchapi",
+  hidden: true,
   alias: "searchapi",
   display: {
     name: "SearchAPI",

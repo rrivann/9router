@@ -1,5 +1,6 @@
 export default {
   id: "aws-polly",
+  hidden: true,
   alias: "polly",
   display: {
     name: "AWS Polly",

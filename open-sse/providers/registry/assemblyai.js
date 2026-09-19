@@ -1,5 +1,6 @@
 export default {
   id: "assemblyai",
+  hidden: true,
   priority: 30,
   alias: "assemblyai",
   aliases: [

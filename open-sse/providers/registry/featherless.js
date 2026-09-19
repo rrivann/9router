@@ -1,5 +1,6 @@
 export default {
   id: "featherless",
+  hidden: true,
   priority: 65,
   alias: "featherless",
   aliases: [

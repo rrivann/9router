@@ -1,5 +1,6 @@
 export default {
   id: "grok-web",
+  hidden: true,
   priority: 150,
   alias: "grok-web",
   aliases: [

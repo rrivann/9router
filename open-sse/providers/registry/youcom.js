@@ -1,5 +1,6 @@
 export default {
   id: "youcom",
+  hidden: true,
   alias: "youcom",
   display: {
     name: "You.com Search",

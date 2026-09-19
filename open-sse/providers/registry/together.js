@@ -1,5 +1,6 @@
 export default {
   id: "together",
+  hidden: true,
   priority: 60,
   alias: "together",
   display: {

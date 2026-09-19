@@ -1,5 +1,6 @@
 export default {
   id: "firecrawl",
+  hidden: true,
   alias: "firecrawl",
   display: {
     name: "Firecrawl",

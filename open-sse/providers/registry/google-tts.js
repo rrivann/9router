@@ -1,5 +1,6 @@
 export default {
   id: "google-tts",
+  hidden: true,
   alias: "google-tts",
   display: {
     name: "Google TTS",

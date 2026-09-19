@@ -1,5 +1,6 @@
 export default {
   id: "kimchi",
+  hidden: true,
   priority: 95,
   alias: "kimchi",
   uiAlias: "kimchi",

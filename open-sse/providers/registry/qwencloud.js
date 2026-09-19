@@ -1,5 +1,6 @@
 export default {
   id: "qwencloud",
+  hidden: true,
   priority: 88,
   alias: "qwc",
   uiAlias: "qwc",

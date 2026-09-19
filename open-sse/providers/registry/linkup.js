@@ -1,5 +1,6 @@
 export default {
   id: "linkup",
+  hidden: true,
   alias: "linkup",
   display: {
     name: "Linkup",

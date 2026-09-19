@@ -1,5 +1,6 @@
 export default {
   id: "github",
+  hidden: true,
   priority: 40,
   alias: "gh",
   uiAlias: "gh",

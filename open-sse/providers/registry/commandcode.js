@@ -1,5 +1,6 @@
 export default {
   id: "commandcode",
+  hidden: true,
   priority: 100,
   alias: "commandcode",
   aliases: [

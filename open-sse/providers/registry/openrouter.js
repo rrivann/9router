@@ -1,5 +1,6 @@
 export default {
   id: "openrouter",
+  hidden: true,
   priority: 10,
   hasFree: true,
   alias: "openrouter",

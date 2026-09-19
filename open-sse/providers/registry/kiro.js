@@ -1,5 +1,6 @@
 export default {
   id: "kiro",
+  hidden: true,
   priority: 10,
   alias: "kr",
   uiAlias: "kr",

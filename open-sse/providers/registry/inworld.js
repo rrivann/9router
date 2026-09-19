@@ -1,5 +1,6 @@
 export default {
   id: "inworld",
+  hidden: true,
   alias: "inworld",
   display: {
     name: "Inworld TTS",

@@ -1,5 +1,6 @@
 export default {
   id: "perplexity",
+  hidden: true,
   priority: 180,
   alias: "perplexity",
   aliases: [

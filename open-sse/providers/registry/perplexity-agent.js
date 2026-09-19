@@ -1,5 +1,6 @@
 export default {
   id: "perplexity-agent",
+  hidden: true,
   priority: 181,
   alias: "perplexity-agent",
   aliases: [

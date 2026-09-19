@@ -1,5 +1,6 @@
 export default {
   id: "xai",
+  hidden: true,
   priority: 280,
   alias: "xai",
   display: {

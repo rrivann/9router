@@ -2,6 +2,7 @@ import { GOOGLE_OAUTH_CLIENT } from "../shared.js";
 
 export default {
   id: "gemini-cli",
+  hidden: true,
   priority: 20,
   hasFree: true,
   alias: "gc",

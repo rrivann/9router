@@ -1,11 +1,11 @@
 ---
 name: 9router
-description: Entry point for 9Router — local/remote AI gateway with OpenAI-compatible REST for chat, image, TTS, embeddings, web search, web fetch. Use when the user mentions 9Router, NINEROUTER_URL, or wants AI without writing provider boilerplate. This skill covers setup + indexes capability skills; fetch the relevant capability SKILL.md from the URLs below when needed.
+description: Entry point for 9Router Gacor — local/remote AI gateway with 0penAI-compatible REST for chat. Routes to CodeBuddy Global (cb/*) and CodeBuddy CN (cbcn/*) with auto-fallback + token savings. Use when the user mentions 9Router, NINEROUTER_URL, or wants AI without writing provider boilerplate.
 ---
 
-# 9Router
+# 9Router Gacor
 
-Local/remote AI gateway exposing OpenAI-compatible REST. One key, many providers, auto-fallback.
+Local/remote AI gateway exposing 0penAI-compatible REST. One key, two providers (CodeBuddy Global + CodeBuddy CN), auto-fallback across accounts, RTK token compression.
 
 ## Setup
 
@@ -21,41 +21,34 @@ Verify: `curl $NINEROUTER_URL/api/health` → `{"ok":true}`
 ## Discover models
 
 ```bash
-curl $NINEROUTER_URL/v1/models                  # chat/LLM (default)
-curl $NINEROUTER_URL/v1/models/image            # image-gen
-curl $NINEROUTER_URL/v1/models/tts              # text-to-speech
-curl $NINEROUTER_URL/v1/models/embedding        # embeddings
-curl $NINEROUTER_URL/v1/models/web              # web search + fetch (entries have `kind` field)
-curl $NINEROUTER_URL/v1/models/stt              # speech-to-text
-curl $NINEROUTER_URL/v1/models/image-to-text    # vision
+curl $NINEROUTER_URL/v1/models                  # all chat models
 ```
 
-Use `data[].id` as `model` field in requests. Combos appear with `owned_by:"combo"`.
+Use `data[].id` as `model` field. Combos appear with `owned_by:"combo"`.
 
 Response shape:
 ```json
 { "object": "list", "data": [
-  { "id": "openai/gpt-5", "object": "model", "owned_by": "openai", "created": 1735000000 },
-  { "id": "tavily/search", "object": "model", "kind": "webSearch", "owned_by": "tavily", "created": 1735000000 }
+  { "id": "cb/claude-opus-4.7-1m", "object": "model", "owned_by": "codebuddy", "created": 1735000000 },
+  { "id": "cbcn/glm-5.2", "object": "model", "owned_by": "codebuddy-cn", "created": 1735000000 }
 ]}
 ```
 
-## Capability skills
+## Popular models
 
-When the user needs a specific capability, fetch that skill's `SKILL.md` from its raw URL:
+| Provider | Model IDs |
+|---|---|
+| CodeBuddy Global (`cb/*`) | `cb/claude-opus-5`, `cb/claude-opus-4.7-1m`, `cb/claude-sonnet-4.6`, `cb/gpt-6-astra`, `cb/gpt-5.6-sol`, `cb/gemini-3.1-pro`, `cb/deepseek-v4.1-flash`, `cb/glm-5.3`, `cb/kimi-k3` |
+| CodeBuddy CN (`cbcn/*`) | `cbcn/glm-5.3`, `cbcn/glm-5.2`, `cbcn/kimi-k3`, `cbcn/kimi-k2.5`, `cbcn/minimax-m3`, `cbcn/deepseek-v4.1-flash`, `cbcn/hunyuan` |
+
+## Capability skills
 
 | Capability | Raw URL |
 |---|---|
-| Chat / code-gen | https://raw.githubusercontent.com/decolua/9router/refs/heads/master/skills/9router-chat/SKILL.md |
-| Image generation | https://raw.githubusercontent.com/decolua/9router/refs/heads/master/skills/9router-image/SKILL.md |
-| Text-to-speech | https://raw.githubusercontent.com/decolua/9router/refs/heads/master/skills/9router-tts/SKILL.md |
-| Speech-to-text | https://raw.githubusercontent.com/decolua/9router/refs/heads/master/skills/9router-stt/SKILL.md |
-| Embeddings | https://raw.githubusercontent.com/decolua/9router/refs/heads/master/skills/9router-embeddings/SKILL.md |
-| Web search | https://raw.githubusercontent.com/decolua/9router/refs/heads/master/skills/9router-web-search/SKILL.md |
-| Web fetch (URL → markdown) | https://raw.githubusercontent.com/decolua/9router/refs/heads/master/skills/9router-web-fetch/SKILL.md |
+| Chat / code-gen | https://raw.githubusercontent.com/rrivann/9router/refs/heads/master/skills/9router-chat/SKILL.md |
 
 ## Errors
 
 - 401 → set/refresh `NINEROUTER_KEY` (Dashboard → Keys)
-- 400 `Invalid model format` → check `model` exists in `/v1/models/<kind>`
-- 503 `All accounts unavailable` → wait `retry-after` or add another provider account
+- 400 `Invalid model format` → check `model` exists in `/v1/models`
+- 503 `All accounts unavailable` → wait `retry-after` or add another CodeBuddy account

@@ -1,5 +1,6 @@
 export default {
   id: "fireworks",
+  hidden: true,
   priority: 50,
   alias: "fireworks",
   display: {

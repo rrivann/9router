@@ -1,5 +1,6 @@
 export default {
   id: "vertex-partner",
+  hidden: true,
   priority: 260,
   alias: "vertex-partner",
   aliases: [

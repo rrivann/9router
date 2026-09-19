@@ -1,5 +1,6 @@
 export default {
   id: "nvidia",
+  hidden: true,
   priority: 20,
   hasFree: true,
   alias: "nvidia",

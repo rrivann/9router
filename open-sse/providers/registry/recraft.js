@@ -1,5 +1,6 @@
 export default {
   id: "recraft",
+  hidden: true,
   priority: 70,
   alias: "recraft",
   display: {

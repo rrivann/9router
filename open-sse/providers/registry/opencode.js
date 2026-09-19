@@ -1,5 +1,6 @@
 export default {
   id: "opencode",
+  hidden: true,
   priority: 40,
   hasFree: true,
   alias: "oc",

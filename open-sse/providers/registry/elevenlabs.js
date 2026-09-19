@@ -1,5 +1,6 @@
 export default {
   id: "elevenlabs",
+  hidden: true,
   alias: "el",
   display: {
     name: "ElevenLabs",

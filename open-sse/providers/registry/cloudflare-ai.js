@@ -1,5 +1,6 @@
 export default {
   id: "cloudflare-ai",
+  hidden: true,
   priority: 60,
   hasFree: true,
   alias: "cloudflare-ai",

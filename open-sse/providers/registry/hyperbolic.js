@@ -1,5 +1,6 @@
 export default {
   id: "hyperbolic",
+  hidden: true,
   priority: 160,
   alias: "hyperbolic",
   aliases: [

@@ -1,5 +1,6 @@
 export default {
   id: "jina-reader",
+  hidden: true,
   alias: "jina-reader",
   display: {
     name: "Jina Reader",

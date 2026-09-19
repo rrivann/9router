@@ -1,5 +1,6 @@
 export default {
   id: "mistral",
+  hidden: true,
   priority: 80,
   alias: "mistral",
   display: {

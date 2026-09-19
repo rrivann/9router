@@ -1,5 +1,6 @@
 export default {
   id: "glm-cn",
+  hidden: true,
   priority: 130,
   alias: "glm-cn",
   display: {

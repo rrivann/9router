@@ -2,6 +2,7 @@ import { CLAUDE_API_HEADERS } from "../shared.js";
 
 export default {
   id: "xiaomi-mimo",
+  hidden: true,
   priority: 290,
   alias: "xiaomi-mimo",
   aliases: [

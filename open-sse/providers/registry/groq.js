@@ -1,5 +1,6 @@
 export default {
   id: "groq",
+  hidden: true,
   priority: 60,
   hasFree: true,
   alias: "groq",

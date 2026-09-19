@@ -1,5 +1,6 @@
 export default {
   id: "nanobanana",
+  hidden: true,
   priority: 80,
   hasFree: true,
   alias: "nanobanana",

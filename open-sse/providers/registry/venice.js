@@ -1,5 +1,6 @@
 export default {
   id: "venice",
+  hidden: true,
   priority: 115,
   alias: "venice",
   aliases: [

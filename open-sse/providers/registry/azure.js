@@ -1,5 +1,6 @@
 export default {
   id: "azure",
+  hidden: true,
   priority: 40,
   alias: "azure",
   display: {

@@ -1,5 +1,6 @@
 export default {
   id: "nebius",
+  hidden: true,
   priority: 70,
   alias: "nebius",
   display: {
