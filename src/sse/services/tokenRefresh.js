@@ -2,26 +2,13 @@
 import * as log from "../utils/logger.js";
 import { updateProviderConnection } from "../../lib/localDb.js";
 import {
-  getProjectIdForConnection,
-  invalidateProjectId,
-  removeConnection,
-} from "open-sse/services/projectId.js";
-import {
   TOKEN_EXPIRY_BUFFER_MS as BUFFER_MS,
-  refreshAccessToken as _refreshAccessToken,
-  refreshClaudeOAuthToken as _refreshClaudeOAuthToken,
-  refreshGoogleToken as _refreshGoogleToken,
-  refreshQwenToken as _refreshQwenToken,
-  refreshCodexToken as _refreshCodexToken,
-  refreshIflowToken as _refreshIflowToken,
-  refreshGitHubToken as _refreshGitHubToken,
-  refreshCopilotToken as _refreshCopilotToken,
+  refreshCodebuddyToken as _refreshCodebuddyToken,
   getAccessToken as _getAccessToken,
   refreshTokenByProvider as _refreshTokenByProvider,
   formatProviderCredentials as _formatProviderCredentials,
   getAllAccessTokens as _getAllAccessTokens,
-  refreshKiroToken as _refreshKiroToken,
-  getRefreshLeadMs as _getRefreshLeadMs
+  getRefreshLeadMs as _getRefreshLeadMs,
 } from "open-sse/services/tokenRefresh.js";
 import {
   refreshProviderCredentials as _refreshProviderCredentials,
@@ -32,32 +19,8 @@ export const TOKEN_EXPIRY_BUFFER_MS = BUFFER_MS;
 
 // ─── Re-exports wrapped with local logger ─────────────────────────────────────
 
-export const refreshAccessToken = (provider, refreshToken, credentials) =>
-  _refreshAccessToken(provider, refreshToken, credentials, log);
-
-export const refreshClaudeOAuthToken = (refreshToken) =>
-  _refreshClaudeOAuthToken(refreshToken, log);
-
-export const refreshGoogleToken = (refreshToken, clientId, clientSecret) =>
-  _refreshGoogleToken(refreshToken, clientId, clientSecret, log);
-
-export const refreshQwenToken = (refreshToken) =>
-  _refreshQwenToken(refreshToken, log);
-
-export const refreshCodexToken = (refreshToken) =>
-  _refreshCodexToken(refreshToken, log);
-
-export const refreshIflowToken = (refreshToken) =>
-  _refreshIflowToken(refreshToken, log);
-
-export const refreshGitHubToken = (refreshToken) =>
-  _refreshGitHubToken(refreshToken, log);
-
-export const refreshCopilotToken = (githubAccessToken) =>
-  _refreshCopilotToken(githubAccessToken, log);
-
-export const refreshKiroToken = (refreshToken, providerSpecificData) =>
-  _refreshKiroToken(refreshToken, providerSpecificData, log);
+export const refreshCodebuddyToken = (refreshToken) =>
+  _refreshCodebuddyToken(refreshToken, log);
 
 export const getAccessToken = (provider, credentials) =>
   _getAccessToken(provider, credentials, log);
@@ -74,28 +37,8 @@ export const getAllAccessTokens = (userInfo) =>
 export const shouldRefreshCredentials = (provider, credentials) =>
   _shouldRefreshCredentials(provider, credentials);
 
-// ─── Lifecycle hook ───────────────────────────────────────────────────────────
-
-/**
- * Call this when a connection is fully closed / removed.
- * Aborts any in-flight projectId fetch and evicts its cache entry,
- * preventing the module-level Maps from accumulating stale entries.
- *
- * @param {string} connectionId
- */
-export function releaseConnection(connectionId) {
-  if (!connectionId) return;
-  removeConnection(connectionId);
-  log.debug("TOKEN_REFRESH", "Released connection resources", { connectionId });
-}
-
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
-/**
- * Compute an ISO expiry timestamp from a relative expiresIn (seconds).
- * @param {number} expiresIn
- * @returns {string}
- */
 function toExpiresAt(expiresIn) {
   return new Date(Date.now() + expiresIn * 1000).toISOString();
 }
@@ -107,58 +50,8 @@ function normalizeExpiresAt(expiresAt) {
   return date.toISOString();
 }
 
-/**
- * Providers that carry a real Google project ID.
- * @param {string} provider
- * @returns {boolean}
- */
-function needsProjectId(provider) {
-  return provider === "antigravity" || provider === "gemini-cli";
-}
-
-/**
- * Non-blocking: fetch the project ID for a connection after a token refresh and
- * persist it to localDb.  Invalidates the stale cached value first so the fetch
- * always retrieves a fresh one.
- *
- * @param {string} provider
- * @param {string} connectionId
- * @param {string} accessToken
- */
-function _refreshProjectId(provider, connectionId, accessToken) {
-  if (!needsProjectId(provider) || !connectionId || !accessToken) return;
-
-  // Evict the stale cached entry so getProjectIdForConnection does a real fetch
-  invalidateProjectId(connectionId);
-
-  getProjectIdForConnection(connectionId, accessToken)
-    .then((projectId) => {
-      if (!projectId) return;
-      updateProviderCredentials(connectionId, { projectId }).catch((err) => {
-        log.debug("TOKEN_REFRESH", "Failed to persist refreshed projectId", {
-          connectionId,
-          error: err?.message ?? err,
-        });
-      });
-    })
-    .catch((err) => {
-      log.debug("TOKEN_REFRESH", "Failed to fetch projectId after token refresh", {
-        connectionId,
-        error: err?.message ?? err,
-      });
-    });
-}
-
 // ─── Local-specific: persist credentials to localDb ──────────────────────────
 
-/**
- * Persist updated credentials for a connection to localDb.
- * Only fields that are present in `newCredentials` are written.
- *
- * @param {string} connectionId
- * @param {object} newCredentials
- * @returns {Promise<boolean>}
- */
 export async function updateProviderCredentials(connectionId, newCredentials) {
   try {
     const updates = {};
@@ -184,13 +77,6 @@ export async function updateProviderCredentials(connectionId, newCredentials) {
         ...newCredentials.providerSpecificData,
       };
     }
-    if (newCredentials.copilotToken || newCredentials.copilotTokenExpiresAt) {
-      updates.providerSpecificData = {
-        ...(updates.providerSpecificData || newCredentials.existingProviderSpecificData || {}),
-        ...(newCredentials.copilotToken ? { copilotToken: newCredentials.copilotToken } : {}),
-        ...(newCredentials.copilotTokenExpiresAt ? { copilotTokenExpiresAt: newCredentials.copilotTokenExpiresAt } : {}),
-      };
-    }
     if (newCredentials.projectId)            updates.projectId = newCredentials.projectId;
 
     const result = await updateProviderConnection(connectionId, updates);
@@ -210,21 +96,12 @@ export async function updateProviderCredentials(connectionId, newCredentials) {
 
 // ─── Local-specific: proactive token refresh ─────────────────────────────────
 
-/**
- * Check whether the provider token (and, for GitHub, the Copilot token) is
- * about to expire and refresh it proactively.
- *
- * @param {string} provider
- * @param {object} credentials
- * @returns {Promise<object>} updated credentials object
- */
 export async function checkAndRefreshToken(provider, credentials) {
   let creds = { ...credentials };
   if (!creds.connectionId && creds.id) {
     creds.connectionId = creds.id;
   }
 
-  // ── 1. Regular access-token expiry ────────────────────────────────────────
   if (_shouldRefreshCredentials(provider, creds)) {
     const expiresAt = creds.expiresAt ? new Date(creds.expiresAt).getTime() : null;
     const remaining = expiresAt ? expiresAt - Date.now() : null;
@@ -238,13 +115,12 @@ export async function checkAndRefreshToken(provider, credentials) {
     });
 
     const newCreds = await _refreshProviderCredentials(provider, creds, log);
-    if (newCreds?.accessToken || newCreds?.apiKey || newCreds?.copilotToken) {
+    if (newCreds?.accessToken || newCreds?.apiKey) {
       const mergedCreds = {
         ...newCreds,
         existingProviderSpecificData: creds.providerSpecificData,
       };
 
-      // Persist to DB (non-blocking path continues below)
       await updateProviderCredentials(creds.connectionId, mergedCreds);
 
       creds = {
@@ -257,69 +133,12 @@ export async function checkAndRefreshToken(provider, credentials) {
           ? { ...creds.providerSpecificData, ...newCreds.providerSpecificData }
           : creds.providerSpecificData,
       };
-
-      // Non-blocking: refresh projectId with the new access token
-      _refreshProjectId(provider, creds.connectionId, creds.accessToken);
-    }
-  }
-
-  // ── 2. GitHub Copilot token expiry ────────────────────────────────────────
-  if (provider === "github") {
-    const copilotToken = creds.providerSpecificData?.copilotToken;
-    const copilotExpiresAt = creds.providerSpecificData?.copilotTokenExpiresAt
-      ? creds.providerSpecificData.copilotTokenExpiresAt * 1000
-      : 0;
-    const now              = Date.now();
-    const remaining        = copilotExpiresAt - now;
-
-    if (!copilotToken || remaining < TOKEN_EXPIRY_BUFFER_MS) {
-      log.info("TOKEN_REFRESH", "Copilot token expiring soon or missing, refreshing proactively", {
-        provider,
-        expiresIn: copilotToken ? Math.round(remaining / 1000) : "missing",
-      });
-
-      const copilotTokenResult = await refreshCopilotToken(creds.accessToken);
-      if (copilotTokenResult) {
-        const updatedSpecific = {
-          ...creds.providerSpecificData,
-          copilotToken:          copilotTokenResult.token,
-          copilotTokenExpiresAt: copilotTokenResult.expiresAt,
-        };
-
-        await updateProviderCredentials(creds.connectionId, {
-          providerSpecificData: updatedSpecific,
-        });
-
-        creds.providerSpecificData = updatedSpecific;
-        creds.copilotToken = copilotTokenResult.token;
-      }
     }
   }
 
   return creds;
 }
 
-// ─── Local-specific: combined GitHub + Copilot refresh ───────────────────────
-
-/**
- * Refresh the GitHub OAuth token and immediately exchange it for a fresh
- * Copilot token.
- *
- * @param {object} credentials  – must contain `refreshToken`
- * @returns {Promise<object|null>} merged credentials or the raw GitHub credentials on Copilot failure
- */
-export async function refreshGitHubAndCopilotTokens(credentials) {
-  const newGitHubCreds = await refreshGitHubToken(credentials.refreshToken);
-  if (!newGitHubCreds?.accessToken) return newGitHubCreds;
-
-  const copilotToken = await refreshCopilotToken(newGitHubCreds.accessToken);
-  if (!copilotToken) return newGitHubCreds;
-
-  return {
-    ...newGitHubCreds,
-    providerSpecificData: {
-      copilotToken:          copilotToken.token,
-      copilotTokenExpiresAt: copilotToken.expiresAt,
-    },
-  };
+export function releaseConnection(_connectionId) {
+  // No-op: dynamic project-id cache tied to gemini-cli/antigravity has been removed with those providers.
 }

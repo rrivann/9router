@@ -4,7 +4,6 @@ import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy";
 import { resetComboRotation } from "open-sse/services/combo.js";
 import { invalidateContentFiltersCache as invalidateCnFilters } from "open-sse/executors/codebuddy-cn.js";
 import { invalidateContentFiltersCache as invalidateGlobalFilters } from "open-sse/executors/codebuddy.js";
-import { invalidateContentFiltersCache as invalidateQwenFilters } from "open-sse/executors/qwencloud.js";
 import bcrypt from "bcryptjs";
 
 export const dynamic = "force-dynamic";
@@ -104,7 +103,6 @@ export async function PATCH(request) {
     if (Object.prototype.hasOwnProperty.call(body, "contentFilters")) {
       invalidateCnFilters();
       invalidateGlobalFilters();
-      invalidateQwenFilters();
     }
 
     if (

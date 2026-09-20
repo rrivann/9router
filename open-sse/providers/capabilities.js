@@ -105,44 +105,6 @@ const KIRO_GPT_5_6_CAPABILITIES = { vision: true, reasoning: true, search: true,
  * Provider-specific capability overrides. Keyed by provider alias/id.
  */
 export const PROVIDER_CAPABILITIES = {
-  // NVIDIA NIM is OpenAI-compatible → rejects MiniMax/GLM native `thinking` field.
-  // Force openai reasoning_effort format for its reasoning models. #issue
-  "nvidia": {
-    "minimaxai/minimax-m2.7": { reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 200000, maxOutput: 131072 },
-    "minimaxai/minimax-m3": { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: false, contextWindow: 512000, maxOutput: 131072 },
-    "z-ai/glm-5.2": { reasoning: true, thinkingFormat: "openai", contextWindow: 200000, maxOutput: 128000 },
-    "deepseek-ai/deepseek-v4-pro": { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 65536 },
-    "deepseek-ai/deepseek-v4-flash": { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 65536 },
-  },
-  "kiro": {
-    "gpt-5.6-sol": KIRO_GPT_5_6_CAPABILITIES,
-    "gpt-5.6-terra": KIRO_GPT_5_6_CAPABILITIES,
-    "gpt-5.6-luna": KIRO_GPT_5_6_CAPABILITIES,
-    "gpt-5.6-sol-thinking": KIRO_GPT_5_6_CAPABILITIES,
-    "gpt-5.6-terra-thinking": KIRO_GPT_5_6_CAPABILITIES,
-    "gpt-5.6-luna-thinking": KIRO_GPT_5_6_CAPABILITIES,
-    "gpt-5.6-sol-agentic": KIRO_GPT_5_6_CAPABILITIES,
-    "gpt-5.6-terra-agentic": KIRO_GPT_5_6_CAPABILITIES,
-    "gpt-5.6-luna-agentic": KIRO_GPT_5_6_CAPABILITIES,
-    "gpt-5.6-sol-thinking-agentic": KIRO_GPT_5_6_CAPABILITIES,
-    "gpt-5.6-terra-thinking-agentic": KIRO_GPT_5_6_CAPABILITIES,
-    "gpt-5.6-luna-thinking-agentic": KIRO_GPT_5_6_CAPABILITIES,
-  },
-  // CodeBuddy.cn — authoritative per-model metadata from the gateway's model
-  // config (contextWindow=maxInputTokens, maxOutput=maxOutputTokens, vision=
-  // supportsImages). Every model reasons via OpenAI-style reasoning_effort
-  // (see registry thinkingFormat). `onlyReasoning` models can't turn thinking
-  // off → thinkingCanDisable:false (clamped to minimal instead of disabled).
-  // Qwen Cloud (dashscope-intl.aliyuncs.com compatible-mode) — OpenAI-compatible.
-  // Every model reasons via reasoning_effort (OpenAI shape). Without an explicit
-  // entry here, glm-* matches "*glm-5*" (thinkingFormat: zai) and deepseek-*
-  // matches "*deepseek-v4*" (thinkingFormat: deepseek), both wrong for this
-  // upstream. Force "openai" format so reasoning_effort passes through.
-  "qwencloud": {
-    "glm-5.2":         { reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 8192 },
-    "deepseek-v4-pro": { reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 8192 },
-    "qwen3.7-max":     { reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 8192 },
-  },
 
   // CodeBuddy Global (www.codebuddy.ai) — OpenAI-compatible unified gateway.
   // Every model reasons via reasoning_effort (OpenAI shape), including the

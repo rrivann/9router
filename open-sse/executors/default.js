@@ -1,8 +1,6 @@
 import { BaseExecutor } from "./base.js";
 import { PROVIDERS, PROVIDER_OAUTH } from "../config/providers.js";
 import { ANTHROPIC_API_VERSION, OPENAI_COMPAT_BASE, ANTHROPIC_COMPAT_BASE } from "../providers/shared.js";
-import { OAUTH_ENDPOINTS, buildKimiHeaders } from "../config/appConstants.js";
-import { buildClineHeaders } from "../shared/clineAuth.js";
 import { getCachedClaudeHeaders } from "../utils/claudeHeaderCache.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
@@ -38,9 +36,6 @@ function applyAuth(headers, desc, credentials) {
 
 // Provider-specific header quirks kept as small hooks (not pure auth).
 const HEADER_HOOKS = {
-  kimiHeaders: (h) => Object.assign(h, buildKimiHeaders()),
-  clineHeaders: (h, c) => Object.assign(h, buildClineHeaders(c.apiKey || c.accessToken)),
-  kilocodeOrg: (h, c) => { if (c.providerSpecificData?.orgId) h["X-Kilocode-OrganizationID"] = c.providerSpecificData.orgId; },
   claudeOverlay: (h) => {
     const cached = getCachedClaudeHeaders();
     if (!cached) return;
@@ -76,9 +71,19 @@ const REFRESH_GRANTS = Object.fromEntries(
     })
 );
 
+// Minimal fallback transport when provider registry entry has been pruned.
+// Requests to any provider outside the whitelist still get sensible defaults
+// instead of throwing at header/URL build time.
+const FALLBACK_TRANSPORT = {
+  baseUrl: "",
+  format: "openai",
+  headers: {},
+  auth: { combined: true, header: "Authorization", scheme: "bearer" },
+};
+
 export class DefaultExecutor extends BaseExecutor {
   constructor(provider) {
-    super(provider, PROVIDERS[provider] || PROVIDERS.openai);
+    super(provider, PROVIDERS[provider] || FALLBACK_TRANSPORT);
   }
 
   transformRequest(model, body) {
@@ -205,126 +210,11 @@ export class DefaultExecutor extends BaseExecutor {
     return headers;
   }
 
-  // Generic OAuth refresh for the common {grant_type, refresh_token, client_id[, ...]} shape.
-  // grant = REFRESH_GRANTS[provider]; client creds resolved from PROVIDERS or this.config.
-  refreshFromGrant(credentials, proxyOptions) {
-    const grant = REFRESH_GRANTS[this.provider];
-    const params = { grant_type: "refresh_token", refresh_token: credentials.refreshToken, ...grant.params(this) };
-    return grant.encoding === "json"
-      ? this.refreshWithJSON(grant.url(), params, proxyOptions)
-      : this.refreshWithForm(grant.url(), params, proxyOptions);
-  }
-
-  async refreshCredentials(credentials, log, proxyOptions = null) {
-    if (!credentials.refreshToken) return null;
-
-    const refreshers = {
-      claude: () => this.refreshFromGrant(credentials, proxyOptions),
-      codex: () => this.refreshFromGrant(credentials, proxyOptions),
-      qwen: () => this.refreshWithForm(OAUTH_ENDPOINTS.qwen.token, { grant_type: "refresh_token", refresh_token: credentials.refreshToken, client_id: PROVIDERS.qwen.clientId }, proxyOptions),
-      iflow: () => this.refreshIflow(credentials.refreshToken, proxyOptions),
-      gemini: () => this.refreshFromGrant(credentials, proxyOptions),
-      kiro: () => this.refreshKiro(credentials.refreshToken, proxyOptions),
-      cline: () => this.refreshCline(credentials.refreshToken, proxyOptions),
-      clinepass: () => this.refreshCline(credentials.refreshToken, proxyOptions),
-      "kimi-coding": () => this.refreshKimiCoding(credentials.refreshToken, proxyOptions),
-      kilocode: () => this.refreshKilocode(credentials.refreshToken, proxyOptions)
-    };
-
-    const refresher = refreshers[this.provider];
-    if (!refresher) return null;
-
-    try {
-      const result = await refresher();
-      if (result) log?.info?.("TOKEN", `${this.provider} refreshed`);
-      return result;
-    } catch (error) {
-      log?.error?.("TOKEN", `${this.provider} refresh error: ${error.message}`);
-      return null;
-    }
-  }
-
-  async refreshWithJSON(url, body, proxyOptions = null) {
-    const response = await proxyAwareFetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify(body)
-    }, proxyOptions);
-    if (!response.ok) return null;
-    const tokens = await response.json();
-    return { accessToken: tokens.access_token, refreshToken: tokens.refresh_token || body.refresh_token, expiresIn: tokens.expires_in };
-  }
-
-  async refreshWithForm(url, params, proxyOptions = null) {
-    const response = await proxyAwareFetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" },
-      body: new URLSearchParams(params)
-    }, proxyOptions);
-    if (!response.ok) return null;
-    const tokens = await response.json();
-    return { accessToken: tokens.access_token, refreshToken: tokens.refresh_token || params.refresh_token, expiresIn: tokens.expires_in };
-  }
-
-  async refreshIflow(refreshToken, proxyOptions = null) {
-    const basicAuth = btoa(`${PROVIDERS.iflow.clientId}:${PROVIDERS.iflow.clientSecret}`);
-    const response = await proxyAwareFetch(OAUTH_ENDPOINTS.iflow.token, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json", "Authorization": `Basic ${basicAuth}` },
-      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: PROVIDERS.iflow.clientId, client_secret: PROVIDERS.iflow.clientSecret })
-    }, proxyOptions);
-    if (!response.ok) return null;
-    const tokens = await response.json();
-    return { accessToken: tokens.access_token, refreshToken: tokens.refresh_token || refreshToken, expiresIn: tokens.expires_in };
-  }
-
-  async refreshKiro(refreshToken, proxyOptions = null) {
-    const response = await proxyAwareFetch(PROVIDERS.kiro.tokenUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json", "User-Agent": "kiro-cli/1.0.0" },
-      body: JSON.stringify({ refreshToken })
-    }, proxyOptions);
-    if (!response.ok) return null;
-    const tokens = await response.json();
-    return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken || refreshToken, expiresIn: tokens.expiresIn };
-  }
-
-  async refreshCline(refreshToken, proxyOptions = null) {
-    const response = await proxyAwareFetch(PROVIDERS.cline.refreshUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({ refreshToken, grantType: "refresh_token", clientType: "extension" })
-    }, proxyOptions);
-    if (!response.ok) return null;
-    const payload = await response.json();
-    const data = payload?.data || payload;
-    const expiresAtIso = data?.expiresAt;
-    const expiresIn = expiresAtIso ? Math.max(1, Math.floor((new Date(expiresAtIso).getTime() - Date.now()) / 1000)) : undefined;
-    let accessToken = data?.accessToken;
-    if (accessToken && !accessToken.startsWith("workos:")) {
-      accessToken = `workos:${accessToken}`;
-    }
-    return { accessToken, refreshToken: data?.refreshToken || refreshToken, expiresIn };
-  }
-
-  async refreshKimiCoding(refreshToken, proxyOptions = null) {
-    const kimiHeaders = buildKimiHeaders();
-    const response = await proxyAwareFetch(PROVIDERS["kimi-coding"].refreshUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json",
-        ...kimiHeaders
-      },
-      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: PROVIDERS["kimi-coding"].clientId })
-    }, proxyOptions);
-    if (!response.ok) return null;
-    const tokens = await response.json();
-    return { accessToken: tokens.access_token, refreshToken: tokens.refresh_token || refreshToken, expiresIn: tokens.expires_in };
-  }
-
-  async refreshKilocode(refreshToken, proxyOptions = null) {
-    // Kilocode uses device code flow, no refresh token support
+  // No provider-specific refresh needed: CodeBuddy CN token refresh handled
+  // via open-sse/services/tokenRefresh.js. Anything else routes to CodeBuddy
+  // Global (API key only) or third-party 0penAI/anthr0pic-compatible gateways
+  // (also API key only). refreshCredentials therefore always returns null here.
+  async refreshCredentials(_credentials, _log, _proxyOptions = null) {
     return null;
   }
 }
