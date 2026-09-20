@@ -58,9 +58,6 @@ const accessDeniedTracker = (() => {
 })();
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
-import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
-import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader.js";
-import { appendPxpipeEvent } from "@/lib/pxpipe/events.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { handleComboChat, handleFusionChat } from "open-sse/services/combo.js";
 import { handleBypassRequest } from "open-sse/utils/bypassHandler.js";
@@ -291,19 +288,6 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       apiKey,
       ccFilterNaming: !!chatSettings.ccFilterNaming,
       rtkEnabled: !!chatSettings.rtkEnabled,
-      headroomEnabled: !!chatSettings.headroomEnabled,
-      headroomUrl: chatSettings.headroomUrl || DEFAULT_HEADROOM_URL,
-      headroomCompressUserMessages: !!chatSettings.headroomCompressUserMessages,
-      cavemanEnabled: !!chatSettings.cavemanEnabled,
-      cavemanLevel: chatSettings.cavemanLevel || "full",
-      ponytailEnabled: !!chatSettings.ponytailEnabled,
-      ponytailLevel: chatSettings.ponytailLevel || "full",
-      pxpipeEnabled: !!chatSettings.pxpipeEnabled,
-      pxpipeMinChars: chatSettings.pxpipeMinChars,
-      pxpipeTimeoutMs: chatSettings.pxpipeTimeoutMs,
-      // Lazily warms the in-process module on first use; null when not installed (fail-open)
-      pxpipeTransform: chatSettings.pxpipeEnabled ? await getPxpipeTransform() : null,
-      onPxpipeEvent: appendPxpipeEvent,
       providerThinking,
       // Detect source format by endpoint + body
       sourceFormatOverride: request?.url ? detectFormatByEndpoint(new URL(request.url).pathname, body) : null,

@@ -4,8 +4,43 @@ import os from "os";
 import crypto from "crypto";
 import { execSync, exec, spawn } from "child_process";
 import { promisify } from "util";
-import { execWithPassword } from "@/mitm/dns/dnsConfig";
 import { DATA_DIR } from "@/lib/dataDir.js";
+
+const IS_WIN_HOST = process.platform === "win32";
+
+function isSudoAvailable() {
+  if (IS_WIN_HOST) return false;
+  try {
+    execSync("command -v sudo", { stdio: "ignore", windowsHide: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function execWithPassword(command, password) {
+  return new Promise((resolve, reject) => {
+    const useSudo = isSudoAvailable();
+    const child = useSudo
+      ? spawn("sudo", ["-S", "sh", "-c", command], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true })
+      : spawn("sh", ["-c", command], { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => { stdout += d; });
+    child.stderr.on("data", (d) => { stderr += d; });
+
+    child.on("close", (code) => {
+      if (code === 0) resolve(stdout);
+      else reject(new Error(stderr || `Exit code ${code}`));
+    });
+
+    if (useSudo) {
+      child.stdin.write(`${password}\n`);
+      child.stdin.end();
+    }
+  });
+}
 
 const execAsync = promisify(exec);
 

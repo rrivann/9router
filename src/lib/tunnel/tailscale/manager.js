@@ -2,9 +2,7 @@ import { loadState, generateShortId } from "../shared/state.js";
 import { startFunnel, stopFunnel, isTailscaleRunning, isTailscaleRunningStrict, isTailscaleLoggedIn, isTailscaleLoggedInStrict, startLogin, startDaemonWithPassword, provisionCert } from "./tailscale.js";
 import { waitForHealth } from "./healthCheck.js";
 import { getSettings, updateSettings } from "@/lib/localDb";
-import { getCachedPassword, loadEncryptedPassword, initDbHooks } from "@/mitm/manager";
-
-initDbHooks(getSettings, updateSettings);
+import { getCachedPassword, loadEncryptedPassword } from "./sudoPassword.js";
 
 const svc = {
   cancelToken: { cancelled: false },

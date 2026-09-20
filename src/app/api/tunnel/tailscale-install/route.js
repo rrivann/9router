@@ -3,10 +3,7 @@
 import os from "os";
 import { execSync } from "child_process";
 import { installTailscale, loadState, generateShortId } from "@/lib/tunnel";
-import { getCachedPassword, loadEncryptedPassword, initDbHooks } from "@/mitm/manager";
-import { getSettings, updateSettings } from "@/lib/localDb";
-
-initDbHooks(getSettings, updateSettings);
+import { getCachedPassword, loadEncryptedPassword } from "@/lib/tunnel/tailscale/sudoPassword.js";
 
 const EXTENDED_PATH = `/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:${process.env.PATH || ""}`;
 

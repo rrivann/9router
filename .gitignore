@@ -90,3 +90,5 @@ graphify-out/*
 .next-analyze/*
 .codebase-memory/
 .workbuddy-ai/
+memory/
+build-log.txt
