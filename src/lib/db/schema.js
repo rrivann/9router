@@ -3,7 +3,7 @@
 // pre-change safety backup in migrate.js: when the stored version is lower,
 // one lightweight DB backup is taken before applying schema changes. Forgetting
 // to bump only skips that backup — it does NOT break the additive auto-sync.
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 5;
 
 export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -150,6 +150,50 @@ export const TABLES = {
       "CREATE INDEX IF NOT EXISTS idx_rd_provider ON requestDetails(provider)",
       "CREATE INDEX IF NOT EXISTS idx_rd_model ON requestDetails(model)",
       "CREATE INDEX IF NOT EXISTS idx_rd_conn ON requestDetails(connectionId)",
+    ],
+  },
+  // Async video-generation jobs. Video submits to CodeBuddy return a taskId
+  // that must be polled via /v2/videos/tasks — the poller service persists
+  // status transitions here so /dashboard reflects progress across reloads.
+  videoJobs: {
+    columns: {
+      id: "INTEGER PRIMARY KEY AUTOINCREMENT",
+      taskId: "TEXT NOT NULL",
+      provider: "TEXT NOT NULL",
+      connectionId: "TEXT",
+      model: "TEXT NOT NULL",
+      prompt: "TEXT NOT NULL",
+      status: "TEXT NOT NULL DEFAULT 'queued'",
+      url: "TEXT",
+      resolution: "TEXT",
+      seconds: "INTEGER",
+      credit: "REAL",
+      outputTokens: "INTEGER",
+      errorMessage: "TEXT",
+      createdAt: "TEXT NOT NULL",
+      updatedAt: "TEXT NOT NULL",
+    },
+    indexes: [
+      "CREATE INDEX IF NOT EXISTS idx_vj_created ON videoJobs(createdAt DESC)",
+      "CREATE INDEX IF NOT EXISTS idx_vj_status ON videoJobs(status)",
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_vj_taskId ON videoJobs(taskId)",
+    ],
+  },
+  // Dashboard-only AI chat sessions. Persisted so the sidebar history
+  // survives dashboard reloads. `messages` is a serialized array clipped
+  // client-side to the last ~200 turns.
+  chatSessions: {
+    columns: {
+      id: "INTEGER PRIMARY KEY AUTOINCREMENT",
+      title: "TEXT NOT NULL",
+      model: "TEXT",
+      messages: "TEXT NOT NULL DEFAULT '[]'",
+      messageCount: "INTEGER NOT NULL DEFAULT 0",
+      createdAt: "TEXT NOT NULL",
+      updatedAt: "TEXT NOT NULL",
+    },
+    indexes: [
+      "CREATE INDEX IF NOT EXISTS idx_cs_updated ON chatSessions(updatedAt DESC)",
     ],
   },
 };

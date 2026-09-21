@@ -159,7 +159,7 @@ export class BaseExecutor {
           continue;
         }
 
-        return { response, url, headers, transformedBody };
+        return { response, url, headers, transformedBody, filtersApplied: this._filtersApplied || null };
       } catch (error) {
         clearTimeout(connectTimer);
         lastError = error;

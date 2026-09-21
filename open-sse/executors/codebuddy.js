@@ -89,6 +89,7 @@ export class CodeBuddyGlobalExecutor extends DefaultExecutor {
 
   async execute(params) {
     this._contentFilters = await filters.load();
+    this._filtersApplied = null; // reset per-request
     return super.execute(params);
   }
 
@@ -97,7 +98,9 @@ export class CodeBuddyGlobalExecutor extends DefaultExecutor {
     let messages = normalizeMessages(source.messages);
     const rules = this._contentFilters || [];
     if (rules.length > 0) {
-      messages = applyFiltersToMessages(messages, rules);
+      const result = applyFiltersToMessages(messages, rules);
+      messages = result.messages;
+      if (result.applied.length > 0) this._filtersApplied = result.applied;
     }
     const transformed = { model, messages, stream: true };
     // Honor the client's reasoning_effort if the translator already set one

@@ -2,16 +2,13 @@
  * Shared content-filter helper for executors that support pattern/replacement
  * rewriting of outgoing message text.
  *
- * Before this file existed the same ~65 LOC block was cloned across 4
- * executors (codebuddy, codebuddy-cn, qwencloud), plus a matching
- * fan-out of 4 `invalidateContentFiltersCache` re-exports that
- * `src/app/api/settings/route.js` had to wire individually.
- *
  * Usage inside an executor:
  *
- *   import { createContentFilterCache, applyFiltersToMessages } from "../utils/contentFilters.js";
+ *   import {
+ *     createContentFilterCache, applyFiltersToMessages,
+ *   } from "../utils/contentFilters.js";
  *   const filters = createContentFilterCache("qwencloud");
- *   ...
+ *
  *   async execute(params) {
  *     this._contentFilters = await filters.load();
  *     return super.execute(params);
@@ -19,23 +16,21 @@
  *
  *   transformRequest(model, body) {
  *     const rules = this._contentFilters || [];
- *     if (rules.length &amp;&amp; Array.isArray(body.messages)) {
- *       body.messages = applyFiltersToMessages(body.messages, rules);
+ *     if (rules.length && Array.isArray(body.messages)) {
+ *       const { messages, applied } = applyFiltersToMessages(body.messages, rules);
+ *       body.messages = messages;
+ *       // stash `applied` somewhere the request-details writer can find it
+ *       this._filtersApplied = applied;
  *     }
  *     return body;
  *   }
  *
- * And export `filters.invalidate` so the settings route can hot-reload:
+ * Export `filters.invalidate` so the settings route can hot-reload rules:
  *   export const invalidateContentFiltersCache = filters.invalidate;
  */
 
 import { getSettings } from "@/lib/localDb.js";
 
-/**
- * Create a lazy, per-settings-key cache of compiled regex filters. Cache is
- * populated on first `load()` and reset via `invalidate()`. Malformed regex
- * patterns are silently skipped so one bad rule doesn't disable the rest.
- */
 export function createContentFilterCache(settingsKey) {
   let pending = null;
 
@@ -52,7 +47,11 @@ export function createContentFilterCache(settingsKey) {
         .filter((f) => f.enabled !== false && f.pattern)
         .map((f) => {
           try {
-            return { regex: new RegExp(f.pattern, "g"), replacement: f.replacement ?? "" };
+            return {
+              regex: new RegExp(f.pattern, "g"),
+              pattern: f.pattern,
+              replacement: f.replacement ?? "",
+            };
           } catch {
             return null;
           }
@@ -72,29 +71,59 @@ export function createContentFilterCache(settingsKey) {
 }
 
 /**
- * Apply the compiled filter set to a single string. Returns the string
- * unchanged when `text` isn't a non-empty string or no filters are active.
+ * Apply the compiled filter set to a single string. Returns { text, applied[] }
+ * where applied is a per-rule hit map. Non-matching rules are omitted.
  */
-export function applyFiltersToString(text, filters) {
+function applyFiltersToStringWithStats(text, filters, statsMap) {
   if (typeof text !== "string" || !text || !filters || filters.length === 0) return text;
   let result = text;
   for (const filter of filters) {
-    result = result.replace(filter.regex, filter.replacement);
+    let hits = 0;
+    result = result.replace(filter.regex, () => {
+      hits++;
+      return filter.replacement;
+    });
+    if (hits > 0) {
+      const key = filter.pattern;
+      const existing = statsMap.get(key);
+      if (existing) {
+        existing.hits += hits;
+      } else {
+        statsMap.set(key, {
+          pattern: filter.pattern,
+          replacement: filter.replacement,
+          hits,
+        });
+      }
+    }
   }
   return result;
 }
 
 /**
+ * Backwards-compat plain string filter (no stats). Kept because tests + some
+ * callers pass a plain string and don't care about hit tracking.
+ */
+export function applyFiltersToString(text, filters) {
+  const stats = new Map();
+  return applyFiltersToStringWithStats(text, filters, stats);
+}
+
+/**
  * Rewrite the text of every message in a chat/completions-style `messages`
- * array. Content may be a plain string or an array of parts with `.text`.
- * Non-text parts (images, tool results, etc.) pass through untouched.
+ * array. Returns { messages, applied } where `applied` is an array of
+ * { pattern, replacement, hits } for every rule that fired at least once.
+ * Non-text parts (images, tool results) pass through untouched.
  */
 export function applyFiltersToMessages(messages, filters) {
-  if (!Array.isArray(messages) || !filters || filters.length === 0) return messages;
-  return messages.map((msg) => {
+  if (!Array.isArray(messages) || !filters || filters.length === 0) {
+    return { messages, applied: [] };
+  }
+  const stats = new Map();
+  const next = messages.map((msg) => {
     if (!msg || typeof msg !== "object") return msg;
     if (typeof msg.content === "string") {
-      return { ...msg, content: applyFiltersToString(msg.content, filters) };
+      return { ...msg, content: applyFiltersToStringWithStats(msg.content, filters, stats) };
     }
     if (Array.isArray(msg.content)) {
       return {
@@ -102,7 +131,7 @@ export function applyFiltersToMessages(messages, filters) {
         content: msg.content.map((part) => {
           if (!part || typeof part !== "object") return part;
           if (typeof part.text === "string") {
-            return { ...part, text: applyFiltersToString(part.text, filters) };
+            return { ...part, text: applyFiltersToStringWithStats(part.text, filters, stats) };
           }
           return part;
         }),
@@ -110,19 +139,22 @@ export function applyFiltersToMessages(messages, filters) {
     }
     return msg;
   });
+  return { messages: next, applied: [...stats.values()] };
 }
 
 /**
- * Rewrite the text of every item in a Responses API `input` array. Items are
- * message objects where `content` is a string or an array of parts (e.g.
- * `{ type: "input_text", text }`).
+ * Rewrite the text of every item in a Responses API `input` array. Same
+ * return shape as applyFiltersToMessages.
  */
 export function applyFiltersToInput(input, filters) {
-  if (!Array.isArray(input) || !filters || filters.length === 0) return input;
-  return input.map((item) => {
+  if (!Array.isArray(input) || !filters || filters.length === 0) {
+    return { input, applied: [] };
+  }
+  const stats = new Map();
+  const next = input.map((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return item;
     if (typeof item.content === "string") {
-      return { ...item, content: applyFiltersToString(item.content, filters) };
+      return { ...item, content: applyFiltersToStringWithStats(item.content, filters, stats) };
     }
     if (Array.isArray(item.content)) {
       return {
@@ -130,7 +162,7 @@ export function applyFiltersToInput(input, filters) {
         content: item.content.map((part) => {
           if (!part || typeof part !== "object") return part;
           if (typeof part.text === "string") {
-            return { ...part, text: applyFiltersToString(part.text, filters) };
+            return { ...part, text: applyFiltersToStringWithStats(part.text, filters, stats) };
           }
           return part;
         }),
@@ -138,4 +170,5 @@ export function applyFiltersToInput(input, filters) {
     }
     return item;
   });
+  return { input: next, applied: [...stats.values()] };
 }

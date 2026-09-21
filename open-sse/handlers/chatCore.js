@@ -272,7 +272,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     return Number.isFinite(n) && n >= 0 ? n : 500;
   })();
 
-  let providerResponse, providerUrl, providerHeaders, finalBody;
+  let providerResponse, providerUrl, providerHeaders, finalBody, filtersApplied = null;
   try {
     let attempt = 0;
     let lastError;
@@ -283,6 +283,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
         providerUrl = result.url;
         providerHeaders = result.headers;
         finalBody = result.transformedBody;
+        filtersApplied = result.filtersApplied || null;
         reqLogger.logTargetRequest(providerUrl, providerHeaders, finalBody);
         break;
       } catch (execError) {
@@ -309,7 +310,8 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       request: extractRequestConfig(body, stream),
       providerRequest: translatedBody || null,
       response: { error: error.message || String(error), status: error.name === "AbortError" ? 499 : 502, thinking: null },
-      status: "error"
+      status: "error",
+      filtersApplied
     })).catch(() => { });
 
     if (error.name === "AbortError") {
@@ -346,7 +348,11 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
         }
         try {
           const retryResult = await executor.execute({ model, body: translatedBody, stream, credentials, signal: streamController.signal, log, proxyOptions });
-          if (retryResult.response.ok) { providerResponse = retryResult.response; providerUrl = retryResult.url; }
+          if (retryResult.response.ok) {
+            providerResponse = retryResult.response;
+            providerUrl = retryResult.url;
+            filtersApplied = retryResult.filtersApplied || filtersApplied;
+          }
         } catch { log?.warn?.("TOKEN", `${provider.toUpperCase()} | retry after refresh failed`); }
       } else {
         log?.warn?.("TOKEN", `${provider.toUpperCase()} | refresh failed`);
@@ -368,7 +374,8 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       request: extractRequestConfig(body, stream),
       providerRequest: finalBody || translatedBody || null,
       response: { error: message, status: statusCode, thinking: null },
-      status: "error"
+      status: "error",
+      filtersApplied
     })).catch(() => { });
 
     const errMsg = formatProviderError(new Error(message), provider, model, statusCode);
@@ -380,7 +387,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     return createErrorResult(statusCode, errMsg, resetsAtMs);
   }
 
-  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqTag, log };
+  const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, filtersApplied, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqTag, log };
   const appendLog = (extra) => appendRequestLog({ model, provider, connectionId, ...extra }).catch(() => { });
   const trackDone = () => trackPendingRequest(model, provider, connectionId, false);
 

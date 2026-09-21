@@ -87,6 +87,20 @@ const getPageInfo = (pathname) => {
       icon: "integration_instructions",
       breadcrumbs: [],
     };
+  if (pathname.includes("/models"))
+    return {
+      title: "Models",
+      description: "Every model registered in your provider catalog",
+      icon: "memory",
+      breadcrumbs: [],
+    };
+  if (pathname.includes("/chat"))
+    return {
+      title: "Chat",
+      description: "Ad-hoc chat routed through your active CodeBuddy connections",
+      icon: "chat",
+      breadcrumbs: [],
+    };
   if (pathname.includes("/proxy-pools"))
     return {
       title: "Proxy Pools",

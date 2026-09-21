@@ -70,6 +70,9 @@ export function buildRequestDetail(base, overrides = {}) {
     providerResponse: base.providerResponse || null,
     response: base.response || {},
     status: base.status || "success",
+    filtersApplied: Array.isArray(base.filtersApplied) && base.filtersApplied.length > 0
+      ? base.filtersApplied
+      : null,
     ...overrides
   };
 }

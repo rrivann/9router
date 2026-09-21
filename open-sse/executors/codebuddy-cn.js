@@ -14,6 +14,7 @@ export class CodeBuddyExecutor extends DefaultExecutor {
 
   async execute(params) {
     this._contentFilters = await filters.load();
+    this._filtersApplied = null; // reset per-request
     return super.execute(params);
   }
 
@@ -35,7 +36,9 @@ export class CodeBuddyExecutor extends DefaultExecutor {
 
     const rules = this._contentFilters || [];
     if (rules.length > 0 && Array.isArray(transformed.messages)) {
-      transformed.messages = applyFiltersToMessages(transformed.messages, rules);
+      const result = applyFiltersToMessages(transformed.messages, rules);
+      transformed.messages = result.messages;
+      if (result.applied.length > 0) this._filtersApplied = result.applied;
     }
 
     return transformed;

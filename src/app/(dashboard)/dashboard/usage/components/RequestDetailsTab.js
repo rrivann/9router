@@ -83,11 +83,19 @@ function CollapsibleSection({ title, children, defaultOpen = false, icon = null 
 }
 
 function getCachedTokens(tokens) {
-  return tokens?.cached_tokens || tokens?.cache_read_input_tokens || 0;
+  // Standard 0penAI: cached_tokens; Claude: cache_read_input_tokens;
+  // CodeBuddy: prompt_cache_hit_tokens (mirrors CodeBuddy's usage payload).
+  return tokens?.cached_tokens
+    || tokens?.cache_read_input_tokens
+    || tokens?.prompt_cache_hit_tokens
+    || 0;
 }
 
 function getCacheCreationTokens(tokens) {
-  return tokens?.cache_creation_input_tokens || 0;
+  // Claude: cache_creation_input_tokens; CodeBuddy: prompt_cache_write_tokens.
+  return tokens?.cache_creation_input_tokens
+    || tokens?.prompt_cache_write_tokens
+    || 0;
 }
 
 function getInputTokens(tokens) {
@@ -98,6 +106,38 @@ function getInputTokens(tokens) {
   const cache = getCachedTokens(tokens);
   return prompt < cache ? cache : prompt;
 }
+
+// Cache hit ratio as a percentage of the input token total (cache-inclusive
+// prompt). Returns null when there's no input to divide by so callers can
+// render "—" instead of "NaN%".
+function getCacheHitPercent(tokens) {
+  const input = getInputTokens(tokens);
+  if (!input) return null;
+  const cached = getCachedTokens(tokens);
+  if (!cached) return 0;
+  return (cached / input) * 100;
+}
+
+// Colored badge that fits neatly in the table cell.
+function CacheHitBadge({ tokens }) {
+  const pct = getCacheHitPercent(tokens);
+  if (pct === null || pct === 0) {
+    return <span className="text-text-muted">—</span>;
+  }
+  const label = pct >= 99.95 ? "100%" : `${pct.toFixed(1)}%`;
+  const cls =
+    pct >= 70
+      ? "bg-green-500/15 text-green-700 dark:text-green-300"
+      : pct >= 30
+        ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+        : "bg-black/5 text-text-muted dark:bg-white/5";
+  return (
+    <span className={`inline-block rounded px-1.5 py-0.5 font-mono text-xs ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
 
 export default function RequestDetailsTab() {
   const [details, setDetails] = useState([]);
@@ -257,6 +297,7 @@ export default function RequestDetailsTab() {
                 <th className="text-left p-4 text-sm font-semibold text-text-main">Provider</th>
                 <th className="text-right p-4 text-sm font-semibold text-text-main">Input Tokens</th>
                 <th className="text-right p-4 text-sm font-semibold text-text-main">Cached</th>
+                <th className="text-right p-4 text-sm font-semibold text-text-main">Cache %</th>
                 <th className="text-right p-4 text-sm font-semibold text-text-main">Cache Creation</th>
                 <th className="text-right p-4 text-sm font-semibold text-text-main">Output Tokens</th>
                 <th className="text-left p-4 text-sm font-semibold text-text-main">Latency</th>
@@ -266,7 +307,7 @@ export default function RequestDetailsTab() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="p-8 text-center text-text-muted">
+                  <td colSpan="10" className="p-8 text-center text-text-muted">
                     <div className="flex items-center justify-center gap-2">
                       <span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span>
                       Loading...
@@ -275,7 +316,7 @@ export default function RequestDetailsTab() {
                 </tr>
               ) : details.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="p-8 text-center text-text-muted">
+                  <td colSpan="10" className="p-8 text-center text-text-muted">
                     No request details found
                   </td>
                 </tr>
@@ -301,6 +342,9 @@ export default function RequestDetailsTab() {
                     </td>
                     <td className="p-4 text-sm text-text-main text-right font-mono">
                       {getCachedTokens(detail.tokens) > 0 ? getCachedTokens(detail.tokens).toLocaleString() : "—"}
+                    </td>
+                    <td className="p-4 text-right">
+                      <CacheHitBadge tokens={detail.tokens} />
                     </td>
                     <td className="p-4 text-sm text-text-main text-right font-mono">
                       {getCacheCreationTokens(detail.tokens) > 0 ? getCacheCreationTokens(detail.tokens).toLocaleString() : "—"}
@@ -414,6 +458,42 @@ export default function RequestDetailsTab() {
             </div>
 
             <div className="space-y-4">
+              {Array.isArray(selectedDetail.filtersApplied) && selectedDetail.filtersApplied.length > 0 && (
+                <div className="rounded-lg border border-amber-400/30 bg-amber-400/5 p-3">
+                  <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                    <span className="material-symbols-outlined text-[14px]">filter_alt</span>
+                    Filters applied ({selectedDetail.filtersApplied.length})
+                  </div>
+                  <ul className="flex flex-col gap-1">
+                    {selectedDetail.filtersApplied.map((f, i) => (
+                      <li
+                        key={`${f.pattern}-${i}`}
+                        className="flex items-center justify-between gap-3 rounded bg-black/5 px-2 py-1 dark:bg-white/5"
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <code
+                            className="max-w-[45%] truncate font-mono text-xs text-text-main"
+                            title={f.pattern}
+                          >
+                            {f.pattern}
+                          </code>
+                          <span className="text-text-muted">→</span>
+                          <code
+                            className="max-w-[45%] truncate font-mono text-xs text-text-muted"
+                            title={f.replacement ?? ""}
+                          >
+                            {f.replacement === "" ? " (empty)" : f.replacement}
+                          </code>
+                        </div>
+                        <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                          ×{f.hits}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <CollapsibleSection title="1. Client Request (Input)" defaultOpen={true} icon="input">
                 <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
                   {JSON.stringify(selectedDetail.request, null, 2)}
