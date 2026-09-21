@@ -23,11 +23,12 @@ function stripAlias(model) {
     : model;
 }
 
-async function pickCredential(log) {
+async function listCbCredentials(log) {
   const conns = (await getProviderConnections({ provider: "codebuddy" }))
     .filter((c) => c.isActive !== false)
     .sort((a, b) => (a.priority || 999) - (b.priority || 999));
 
+  const out = [];
   for (const conn of conns) {
     let token = conn.apiKey || conn.accessToken || null;
     if (!token && conn.refreshToken) {
@@ -36,9 +37,9 @@ async function pickCredential(log) {
         if (refreshed?.accessToken) token = refreshed.accessToken;
       } catch {}
     }
-    if (token) return { conn, token };
+    if (token) out.push({ conn, token });
   }
-  return { conn: null, token: null };
+  return out;
 }
 
 export async function handleImageGeneration(body, options = {}) {
@@ -51,8 +52,8 @@ export async function handleImageGeneration(body, options = {}) {
     };
   }
 
-  const { conn, token } = await pickCredential(log);
-  if (!token || !conn) {
+  const creds = await listCbCredentials(log);
+  if (creds.length === 0) {
     return {
       status: 401,
       json: { error: { message: "No active CodeBuddy Global connection", type: "authentication_error" } },
@@ -69,72 +70,64 @@ export async function handleImageGeneration(body, options = {}) {
   if (typeof body?.quality === "string") upstreamBody.quality = body.quality;
   if (typeof body?.response_format === "string") upstreamBody.response_format = body.response_format;
 
-  const reqId = randomUUID().replace(/-/g, "");
-  const conversationId = randomUUID();
-  const headers = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    "User-Agent": USER_AGENT,
-    "X-Requested-With": "XMLHttpRequest",
-    "X-Domain": "www.codebuddy.ai",
-    "X-Product": "SaaS",
-    "X-IDE-Type": "CLI",
-    "X-IDE-Name": "CLI",
-    "X-IDE-Version": CLIENT_VERSION,
-    "X-Request-ID": reqId,
-    "X-Conversation-ID": conversationId,
-    "X-Conversation-Request-ID": conversationId,
-    Authorization: `Bearer ${token}`,
-  };
-
-  let response;
-  try {
-    response = await fetch(CB_IMAGE_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(upstreamBody),
-    });
-  } catch (error) {
-    return {
-      status: 502,
-      json: { error: { message: `Upstream request failed: ${error.message}`, type: "upstream_error" } },
+  // Rotate credentials on 14018 (credits exhausted) / 14019 (rate limit) —
+  // same pattern as submitVideoJob. Everything else bails on first attempt.
+  let response, rawText, outer;
+  let lastError = null;
+  for (const cred of creds) {
+    const reqId = randomUUID().replace(/-/g, "");
+    const conversationId = randomUUID();
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "User-Agent": USER_AGENT,
+      "X-Requested-With": "XMLHttpRequest",
+      "X-Domain": "www.codebuddy.ai",
+      "X-Product": "SaaS",
+      "X-IDE-Type": "CLI",
+      "X-IDE-Name": "CLI",
+      "X-IDE-Version": CLIENT_VERSION,
+      "X-Request-ID": reqId,
+      "X-Conversation-ID": conversationId,
+      "X-Conversation-Request-ID": conversationId,
+      Authorization: `Bearer ${cred.token}`,
     };
+
+    try {
+      response = await fetch(CB_IMAGE_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(upstreamBody),
+      });
+    } catch (error) {
+      lastError = { status: 502, msg: `Upstream request failed: ${error.message}` };
+      continue;
+    }
+
+    rawText = await response.text().catch(() => "");
+    try {
+      outer = JSON.parse(rawText);
+    } catch {
+      lastError = { status: 502, msg: `Image response was not JSON: ${rawText.slice(0, 200)}` };
+      outer = null;
+      continue;
+    }
+
+    if (outer.code === 0) break;
+
+    const errCode = outer?.error?.data?.code ?? outer?.code;
+    const errMsg = outer?.error?.data?.msg ?? outer?.msg ?? "unknown";
+    lastError = { status: response.status || 502, code: errCode, msg: errMsg };
+    const rotatable = errCode === 14018 || errCode === 14019;
+    if (!rotatable) break;
   }
 
-  const rawText = await response.text().catch(() => "");
-  if (!response.ok) {
+  if (!outer || outer.code !== 0) {
     return {
-      status: response.status || 502,
+      status: lastError?.status || 502,
       json: {
         error: {
-          message: `CodeBuddy image gen failed: ${rawText.slice(0, 500) || `HTTP ${response.status}`}`,
-          type: "upstream_error",
-        },
-      },
-    };
-  }
-
-  let outer;
-  try {
-    outer = JSON.parse(rawText);
-  } catch {
-    return {
-      status: 502,
-      json: {
-        error: {
-          message: `Image response was not JSON: ${rawText.slice(0, 200)}`,
-          type: "upstream_error",
-        },
-      },
-    };
-  }
-
-  if (outer.code !== 0) {
-    return {
-      status: 502,
-      json: {
-        error: {
-          message: `CodeBuddy image error: code=${outer.code}, msg=${outer.msg || "unknown"}`,
+          message: `CodeBuddy image gen failed: code=${lastError?.code ?? "undefined"}, msg=${lastError?.msg || "unknown"}`,
           type: "upstream_error",
         },
       },
