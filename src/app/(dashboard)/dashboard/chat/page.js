@@ -67,6 +67,7 @@ export default function ChatPage() {
   const abortRef = useRef(null);
   const fileRef = useRef(null);
   const loadedForRef = useRef(null);
+  const videoPollersRef = useRef(new Map());
 
   const loadSessions = useCallback(async () => {
     try {
@@ -80,7 +81,9 @@ export default function ChatPage() {
 
   const loadModels = useCallback(async () => {
     try {
-      const r = await fetch("/api/v1/models");
+      // Use /api/models/catalog — exposes every kind (chat/image/video) with
+      // metadata. /v1/models filters to LLM-only and skips media models.
+      const r = await fetch("/api/models/catalog");
       const data = await r.json();
       const list = (data?.data || []).map((m) => ({ id: m.id, kind: m.kind || "chat" }));
       setModels(list);
@@ -95,6 +98,27 @@ export default function ChatPage() {
     if (activeId == null) saveLS(LS.active, null);
     else saveLS(LS.active, activeId);
   }, [activeId]);
+
+  const startVideoPoller = useCallback((taskId) => {
+    if (!taskId || videoPollersRef.current.has(taskId)) return;
+    const tick = async () => {
+      try {
+        const r = await fetch(`/api/v1/videos/${taskId}`);
+        const job = await r.json();
+        setMsgs((p) => p.map((m) => (m.video?.taskId === taskId
+          ? { ...m, video: { ...m.video, status: job.status, url: job.url || null, resolution: job.resolution || null, seconds: job.seconds ?? null, credit: job.credit ?? null, errorMessage: job.errorMessage || null } }
+          : m)));
+        if (job.status === "completed" || job.status === "failed") {
+          const h = videoPollersRef.current.get(taskId);
+          if (h) clearInterval(h);
+          videoPollersRef.current.delete(taskId);
+        }
+      } catch {}
+    };
+    const handle = setInterval(tick, 8000);
+    videoPollersRef.current.set(taskId, handle);
+    tick();
+  }, []);
 
   useEffect(() => {
     if (activeId == null) {
@@ -111,12 +135,25 @@ export default function ChatPage() {
         if (!s) { setMsgs([]); return; }
         try {
           const parsed = s.messages ? JSON.parse(s.messages) : [];
-          setMsgs(Array.isArray(parsed) ? parsed : []);
+          const arr = Array.isArray(parsed) ? parsed : [];
+          setMsgs(arr);
+          // Resume polling for any still-pending video jobs in this session.
+          for (const m of arr) {
+            if (m.video?.taskId && m.video.status !== "completed" && m.video.status !== "failed") {
+              startVideoPoller(m.video.taskId);
+            }
+          }
         } catch { setMsgs([]); }
         if (s.model) setModel(s.model);
       })
       .catch(() => setMsgs([]));
-  }, [activeId]);
+  }, [activeId, startVideoPoller]);
+
+  // Clear any active pollers when leaving the page.
+  useEffect(() => () => {
+    for (const h of videoPollersRef.current.values()) clearInterval(h);
+    videoPollersRef.current.clear();
+  }, []);
 
   // Persist when a turn settles.
   useEffect(() => {
@@ -166,6 +203,29 @@ export default function ChatPage() {
         .filter(Boolean);
       if (urls.length === 0) throw new Error("image response had no data");
       setMsgs((p) => [...p, { role: "assistant", content: "", images: urls }]);
+      return;
+    }
+
+    if (selected?.kind === "video") {
+      const lastUser = [...history].reverse().find((m) => m.role === "user");
+      const prompt = (lastUser?.content || "").trim();
+      if (!prompt) throw new Error("video generation needs a text prompt");
+      const res = await fetch("/api/v1/videos/generations", {
+        method: "POST",
+        signal: ac.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, prompt, seconds: 4, resolution: "720P", aspect_ratio: "16:9" }),
+      });
+      if (!res.ok) throw new Error((await res.text().catch(() => "")) || `request failed (${res.status})`);
+      const body = await res.json();
+      const taskId = body?.task_id;
+      if (!taskId) throw new Error("video submit returned no task_id");
+      setMsgs((p) => [...p, {
+        role: "assistant",
+        content: "",
+        video: { taskId, status: body.status || "queued", model, prompt, submittedAt: Date.now() },
+      }]);
+      startVideoPoller(taskId);
       return;
     }
 
@@ -466,6 +526,7 @@ function MessageBubble({ message }) {
             ))}
           </div>
         )}
+        {message.video && <VideoCard video={message.video} />}
       </div>
     </div>
   );
@@ -477,6 +538,52 @@ MessageBubble.propTypes = {
     content: PropTypes.string,
     reasoning: PropTypes.string,
     images: PropTypes.arrayOf(PropTypes.string),
+    video: PropTypes.object,
+  }).isRequired,
+};
+
+function VideoCard({ video }) {
+  const { status, url, prompt, resolution, seconds, credit, errorMessage, submittedAt } = video;
+  const elapsed = submittedAt ? Math.floor((Date.now() - submittedAt) / 1000) : null;
+  if (status === "completed" && url) {
+    return (
+      <div className="mt-2">
+        <video src={url} controls className="max-h-80 rounded border border-border-subtle" />
+        <p className="mt-1 text-[10px] text-text-muted">
+          {resolution} · {seconds}s{typeof credit === "number" ? ` · ${credit.toFixed(2)} credits` : ""}
+        </p>
+      </div>
+    );
+  }
+  if (status === "failed") {
+    return (
+      <div className="mt-2 rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+        Video failed — {errorMessage || "unknown error"}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 rounded border border-border-subtle bg-surface-2/40 px-3 py-2 text-xs text-text-muted">
+      <div className="flex items-center gap-2">
+        <span className="material-symbols-outlined animate-spin text-[14px]">progress_activity</span>
+        <span>Rendering video… <span className="opacity-60">({status}{elapsed != null ? ` · ${elapsed}s` : ""})</span></span>
+      </div>
+      {prompt && <p className="mt-1 truncate italic opacity-75">“{prompt}”</p>}
+    </div>
+  );
+}
+
+VideoCard.propTypes = {
+  video: PropTypes.shape({
+    taskId: PropTypes.string,
+    status: PropTypes.string,
+    url: PropTypes.string,
+    prompt: PropTypes.string,
+    resolution: PropTypes.string,
+    seconds: PropTypes.number,
+    credit: PropTypes.number,
+    errorMessage: PropTypes.string,
+    submittedAt: PropTypes.number,
   }).isRequired,
 };
 

@@ -15,6 +15,16 @@ const ALLOWED_FIELDS = [
   "prompt_cache_key", "user", "safety_identifier",
 ];
 
+// Models whose 0penAI-native upstream rejects reasoning_effort="max" (400
+// unsupported_value) and times out with any effort > xhigh. Any request that
+// arrives with "max" here (e.g. from providerThinking config default) is
+// clamped down to "xhigh" for these models so the request still succeeds.
+// Live-verified 2026-09-21: gpt-5.4 + gpt-5.5 reject max/minimal; low/med/high/xhigh all 200.
+const NO_MAX_EFFORT_MODELS = new Set([
+  "gpt-5.4",
+  "gpt-5.5",
+]);
+
 const filters = createContentFilterCache("codebuddy");
 export const invalidateContentFiltersCache = filters.invalidate;
 
@@ -108,7 +118,12 @@ export class CodeBuddyGlobalExecutor extends DefaultExecutor {
     // CodeBuddy accepts "minimal|low|medium|high|xhigh|max". Default to xhigh.
     const sourceEffort = source.reasoning_effort
       || (typeof source.reasoning === "object" ? source.reasoning?.effort : null);
-    const effort = typeof sourceEffort === "string" && sourceEffort ? sourceEffort : "xhigh";
+    let effort = typeof sourceEffort === "string" && sourceEffort ? sourceEffort : "xhigh";
+    // Clamp "max" → "xhigh" for models whose 0penAI upstream rejects "max"
+    // (gpt-5.4/5.5 return 400 or hang for 60s+ when given effort="max").
+    if (effort === "max" && NO_MAX_EFFORT_MODELS.has(model)) {
+      effort = "xhigh";
+    }
     transformed.reasoning_effort = effort;
     transformed.reasoning = { effort, summary: "auto" };
     for (const field of ALLOWED_FIELDS) {

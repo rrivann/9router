@@ -53,25 +53,25 @@ export default {
   models: [
     // ── GLM (Zhipu) ─────────────────────────────────────────────────
     { id: "glm-5.3", name: "GLM-5.3", ownedBy: "zhipu", maxInputTokens: 1000000, maxOutputTokens: 128000, thinking: true, thinkingToggle: "canDisable", effort: "low→max (5 level)", images: true, toolCalls: true, strip: ["image", "audio"] },
-    { id: "glm-5.3-flash", name: "GLM-5.3-Flash", ownedBy: "zhipu", maxInputTokens: 1000000, maxOutputTokens: 128000, creditMultiplier: 0, thinking: true, thinkingToggle: "canDisable", effort: "low→max (5 level)", images: true, toolCalls: true, strip: ["image", "audio"] },
+    { id: "glm-5.3-flash", name: "GLM-5.3-Flash", ownedBy: "zhipu", maxInputTokens: 1000000, maxOutputTokens: 128000, thinking: true, thinkingToggle: "canDisable", effort: "low→max (5 level)", images: true, toolCalls: true, strip: ["image", "audio"] },
     { id: "glm-5.2", name: "GLM-5.2", ownedBy: "zhipu", maxInputTokens: 1000000, maxOutputTokens: 128000, thinking: true, thinkingToggle: "canDisable", effort: "low→max (5 level)", images: true, toolCalls: true, strip: ["image", "audio"] },
 
     // ── MiniMax ─────────────────────────────────────────────────────
     { id: "minimax-m3", name: "MiniMax-M3", ownedBy: "minimax", maxInputTokens: 1000000, maxOutputTokens: 262144, images: true, toolCalls: true },
-    { id: "minimax-m2.7", name: "MiniMax-M2.7", ownedBy: "minimax", maxInputTokens: 1000000, maxOutputTokens: 32000, images: true, toolCalls: true },
+    { id: "minimax-m2.7", name: "MiniMax-M2.7", ownedBy: "minimax", maxInputTokens: 1000000, maxOutputTokens: 262144, images: true, toolCalls: true },
 
     // ── Kimi (Moonshot) ─────────────────────────────────────────────
-    { id: "kimi-k3", name: "Kimi-K3", ownedBy: "moonshot", maxInputTokens: 1000000, maxOutputTokens: 32000, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
+    { id: "kimi-k3", name: "Kimi-K3", ownedBy: "moonshot", maxInputTokens: 1000000, maxOutputTokens: 262144, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
     { id: "kimi-k2.7", name: "Kimi-K2.7-Code", ownedBy: "moonshot", maxInputTokens: 262144, maxOutputTokens: 32000, thinking: true, images: true, toolCalls: true },
     { id: "kimi-k2.6", name: "Kimi-K2.6", ownedBy: "moonshot", maxInputTokens: 262144, maxOutputTokens: 32000, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
 
     // ── Tencent Hunyuan ─────────────────────────────────────────────
-    { id: "hy4-preview", name: "Hy4 preview", ownedBy: "tencent", maxInputTokens: 1000000, maxOutputTokens: 64000, creditMultiplier: 0.29, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
+    { id: "hy4-preview", name: "Hy4 preview", ownedBy: "tencent", maxInputTokens: 1000000, maxOutputTokens: 64000, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
 
     // ── DeepSeek ────────────────────────────────────────────────────
     { id: "deepseek-v4-pro", name: "DeepSeek-V4-Pro", ownedBy: "deepseek", maxInputTokens: 1000000, maxOutputTokens: 393216, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
     { id: "deepseek-v4-flash", name: "DeepSeek-V4-Flash", ownedBy: "deepseek", maxInputTokens: 1000000, maxOutputTokens: 393216, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
-    { id: "deepseek-v4.1-flash", name: "DeepSeek-V4.1-Flash", ownedBy: "deepseek", maxInputTokens: 1000000, maxOutputTokens: 393216, creditMultiplier: 0, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
+    { id: "deepseek-v4.1-flash", name: "DeepSeek-V4.1-Flash", ownedBy: "deepseek", maxInputTokens: 1000000, maxOutputTokens: 393216, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
   ],
   oauth: {
     baseUrl: "https://copilot.tencent.com",

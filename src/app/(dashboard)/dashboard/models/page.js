@@ -55,14 +55,17 @@ export default function ModelsPage() {
     [models],
   );
 
+  // Scope kind counts to the currently-selected provider so pills reflect
+  // what actually appears in the table when a provider filter is active.
   const kindCounts = useMemo(() => {
-    const c = { all: models.length, chat: 0, image: 0, video: 0 };
-    for (const m of models) {
+    const scoped = provider === "all" ? models : models.filter((m) => m.providerAlias === provider);
+    const c = { all: scoped.length, chat: 0, image: 0, video: 0 };
+    for (const m of scoped) {
       const k = m.kind || "chat";
       if (c[k] !== undefined) c[k] += 1;
     }
     return c;
-  }, [models]);
+  }, [models, provider]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -234,12 +237,20 @@ export default function ModelsPage() {
                         <div className="flex flex-wrap items-center gap-1">
                           {m.kind === "image" && <Badge variant="primary" size="sm">Image</Badge>}
                           {m.kind === "video" && <Badge variant="primary" size="sm">Video</Badge>}
+                          {(m.modalities || []).includes("image") && (
+                            <Badge variant="default" size="sm" title="Accepts image input (multimodal)">Vision</Badge>
+                          )}
                           {m.thinking && (
-                            <Badge variant="success" size="sm" title={m.thinking_toggle === "canDisable" ? "Reasoning can be disabled" : "Reasoning always on"}>
-                              Thinking
+                            <Badge
+                              variant="success"
+                              size="sm"
+                              title={m.thinking_toggle === "canDisable" ? "Reasoning can be disabled" : "Reasoning always on"}
+                            >
+                              {Array.isArray(m.reasoning_levels) && m.reasoning_levels.length > 0
+                                ? `Reasoning · ${m.reasoning_levels.join("/")}`
+                                : "Reasoning"}
                             </Badge>
                           )}
-                          {m.images && <Badge variant="default" size="sm" title="Accepts image input">Img</Badge>}
                           {m.tool_calls && <Badge variant="default" size="sm" title="Tool calling">Tools</Badge>}
                         </div>
                       </td>

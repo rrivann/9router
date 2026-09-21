@@ -62,11 +62,12 @@ function buildVideoHeaders(bearer, uid) {
   };
 }
 
-async function pickCredential(log) {
+async function listCbCredentials(log) {
   const conns = (await getProviderConnections({ provider: "codebuddy" }))
     .filter((c) => c.isActive !== false)
     .sort((a, b) => (a.priority || 999) - (b.priority || 999));
 
+  const out = [];
   for (const conn of conns) {
     let token = conn.apiKey || conn.accessToken || null;
     if (!token && conn.refreshToken) {
@@ -75,9 +76,14 @@ async function pickCredential(log) {
         if (refreshed?.accessToken) token = refreshed.accessToken;
       } catch {}
     }
-    if (token) return { conn, token };
+    if (token) out.push({ conn, token });
   }
-  return { conn: null, token: null };
+  return out;
+}
+
+async function pickCredential(log) {
+  const list = await listCbCredentials(log);
+  return list[0] || { conn: null, token: null };
 }
 
 // Submit a new video job.
@@ -93,8 +99,8 @@ export async function submitVideoJob(body, options = {}) {
     };
   }
 
-  const { conn, token } = await pickCredential(log);
-  if (!token || !conn) {
+  const creds = await listCbCredentials(log);
+  if (creds.length === 0) {
     return {
       status: 401,
       json: { error: { message: "No active CodeBuddy Global connection", type: "authentication_error" } },
@@ -114,38 +120,52 @@ export async function submitVideoJob(body, options = {}) {
     },
   };
 
-  const uid = jwtSub(token);
-  let response;
-  try {
-    response = await fetch(SUBMIT_URL, {
-      method: "POST",
-      headers: buildVideoHeaders(token, uid),
-      body: JSON.stringify(upstreamBody),
-    });
-  } catch (error) {
-    return {
-      status: 502,
-      json: { error: { message: `Upstream request failed: ${error.message}`, type: "upstream_error" } },
-    };
+  // Try each credential until one has credits. Rotate on 14018 (credits
+  // exhausted) or 14019 (rate-limited) — every other upstream error is
+  // returned as-is on the first attempt.
+  let response, text, outer, conn, token;
+  let lastError = null;
+  for (const cred of creds) {
+    conn = cred.conn;
+    token = cred.token;
+    const uid = jwtSub(token);
+    try {
+      response = await fetch(SUBMIT_URL, {
+        method: "POST",
+        headers: buildVideoHeaders(token, uid),
+        body: JSON.stringify(upstreamBody),
+      });
+    } catch (error) {
+      lastError = { status: 502, msg: `Upstream request failed: ${error.message}` };
+      continue;
+    }
+    text = await response.text().catch(() => "");
+    try { outer = JSON.parse(text); } catch {
+      lastError = { status: 502, msg: `Video submit not JSON: ${text.slice(0, 200)}` };
+      continue;
+    }
+
+    // Success shape: { code: 0, data: { id, status } }
+    if (outer.code === 0 && outer.data?.id) break;
+
+    // Two known transient / per-account errors — rotate to next credential.
+    // Everything else is a real submission error: bail immediately.
+    const errCode = outer?.error?.data?.code ?? outer?.code;
+    const errMsg = outer?.error?.data?.msg ?? outer?.msg ?? "unknown";
+    lastError = { status: response.status || 502, msg: errMsg, code: errCode, upstream: outer };
+    const rotatable = errCode === 14018 || errCode === 14019;
+    if (!rotatable) break;
   }
 
-  const text = await response.text().catch(() => "");
-  let outer;
-  try { outer = JSON.parse(text); } catch {
+  if (!outer || outer.code !== 0 || !outer.data?.id) {
     return {
-      status: 502,
-      json: { error: { message: `Video submit not JSON: ${text.slice(0, 200)}`, type: "upstream_error" } },
-    };
-  }
-
-  if (outer.code !== 0 || !outer.data?.id) {
-    return {
-      status: response.status || 502,
+      status: lastError?.status || 502,
       json: {
         error: {
-          message: `Video submit failed: code=${outer.code}, msg=${outer.msg || "unknown"}`,
+          message: `Video submit failed: code=${lastError?.code ?? "undefined"}, msg=${lastError?.msg || "unknown"}`,
           type: "upstream_error",
         },
+        upstream: lastError?.upstream,
       },
     };
   }
@@ -176,6 +196,10 @@ export async function submitVideoJob(body, options = {}) {
 }
 
 // Poll an already-submitted taskId. Persists status transitions.
+// Credential strategy: try the submitting connection first (some upstream
+// task_id lookups are scoped to the account that created them), then rotate
+// through the rest on rotatable errors (14018 credits exhausted, 14019 rate
+// limit). Non-rotatable errors mark the job failed as before.
 export async function pollVideoJob(taskId, options = {}) {
   const log = options.log || null;
   const existing = await getVideoJobByTaskId(taskId);
@@ -185,29 +209,51 @@ export async function pollVideoJob(taskId, options = {}) {
     return { status: 200, json: existing };
   }
 
-  const { token } = await pickCredential(log);
-  if (!token) return { status: 200, json: existing };
-  const uid = jwtSub(token);
+  const creds = await listCbCredentials(log);
+  if (creds.length === 0) return { status: 200, json: existing };
 
-  let response;
-  try {
-    response = await fetch(POLL_URL, {
-      method: "POST",
-      headers: buildVideoHeaders(token, uid),
-      body: JSON.stringify({ task_id: taskId }),
-    });
-  } catch (error) {
+  const ordered = existing.connectionId
+    ? [
+        ...creds.filter((c) => c.conn.id === existing.connectionId),
+        ...creds.filter((c) => c.conn.id !== existing.connectionId),
+      ]
+    : creds;
+
+  let response, text, outer;
+  for (const cred of ordered) {
+    const uid = jwtSub(cred.token);
+    try {
+      response = await fetch(POLL_URL, {
+        method: "POST",
+        headers: buildVideoHeaders(cred.token, uid),
+        body: JSON.stringify({ task_id: taskId }),
+      });
+    } catch {
+      continue;
+    }
+    text = await response.text().catch(() => "");
+    try { outer = JSON.parse(text); } catch {
+      outer = null;
+      continue;
+    }
+    if (outer.code === 0) break;
+
+    const errCode = outer?.error?.data?.code ?? outer?.code;
+    const errMsg = outer?.error?.data?.msg ?? outer?.msg ?? "unknown";
+    const rotatable = errCode === 14018 || errCode === 14019;
+    if (!rotatable) {
+      await updateVideoJob(existing.id, {
+        status: "failed",
+        errorMessage: `poll code=${errCode} msg=${errMsg}`,
+      });
+      return { status: 200, json: await getVideoJobByTaskId(taskId) };
+    }
+  }
+
+  if (!outer || outer.code !== 0) {
+    // All credentials exhausted / rate-limited. Leave job in its current
+    // pending state — the next poll can retry once credit refreshes.
     return { status: 200, json: existing };
-  }
-  const text = await response.text().catch(() => "");
-  let outer;
-  try { outer = JSON.parse(text); } catch {
-    await updateVideoJob(existing.id, { status: "failed", errorMessage: `poll not JSON: ${text.slice(0, 120)}` });
-    return { status: 200, json: await getVideoJobByTaskId(taskId) };
-  }
-  if (outer.code !== 0) {
-    await updateVideoJob(existing.id, { status: "failed", errorMessage: `poll code=${outer.code} msg=${outer.msg}` });
-    return { status: 200, json: await getVideoJobByTaskId(taskId) };
   }
 
   const raw = outer.data?.status || "queued";
