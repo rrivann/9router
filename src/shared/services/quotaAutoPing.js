@@ -1,5 +1,5 @@
 // Quota auto-ping scheduler — no-op in the CodeBuddy-only fork.
-// Original scheduler warmed 5h windows for CL4ude / Codex providers, both removed.
+// Original scheduler warmed 5h windows for Claude / Codex providers, both removed.
 
 export function startQuotaAutoPing() {
   // no-op

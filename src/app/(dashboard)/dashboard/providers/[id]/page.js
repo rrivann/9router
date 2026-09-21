@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal } from "@/shared/components";
+import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal } from "@/shared/components";
 import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, getProviderAlias, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS } from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { getThinkingLevels } from "open-sse/providers/thinkingLevels.js";
@@ -43,7 +43,6 @@ export default function ProviderDetailPage() {
   const [providerNode, setProviderNode] = useState(null);
   const [proxyPools, setProxyPools] = useState([]);
   const [showOAuthModal, setShowOAuthModal] = useState(false);
-  const [showIFlowCookieModal, setShowIFlowCookieModal] = useState(false);
   const [showAddApiKeyModal, setShowAddApiKeyModal] = useState(false);
   const [addConnectionError, setAddConnectionError] = useState("");
   const [showBulkImportCodex, setShowBulkImportCodex] = useState(false);
@@ -77,7 +76,6 @@ export default function ProviderDetailPage() {
   const [oneByOneResults, setOneByOneResults] = useState({});
   const [oneByOneSummary, setOneByOneSummary] = useState(null);
   const stopOneByOneRef = useRef(false);
-  const [importingQoderModels, setImportingQoderModels] = useState(false);
   const { copied, copy } = useCopyToClipboard();
 
   const AG_RISK_STORAGE_KEY = "ag_risk_confirmed";
@@ -542,60 +540,6 @@ export default function ProviderDetailPage() {
     }
   };
 
-  // Fetch Qoder model list and automatically add to available models
-  const handleImportQoderModels = async () => {
-    if (importingQoderModels) return;
-    const activeConnection = connections.find((conn) => conn.isActive !== false);
-    if (!activeConnection) {
-      alert(translate("Please add an active Qoder connection first"));
-      return;
-    }
-
-    setImportingQoderModels(true);
-    try {
-      const res = await fetch(`/api/providers/${activeConnection.id}/models`);
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || translate("Failed to fetch models"));
-        return;
-      }
-      const models = data.models || [];
-      if (models.length === 0) {
-        alert(translate("No models returned"));
-        return;
-      }
-
-      let importedCount = 0;
-      for (const model of models) {
-        const modelId = model.id || model.name;
-        if (!modelId) continue;
-        
-        // Qoder model ID format may be "qoder/auto" or "auto", need to remove prefix
-        const cleanModelId = modelId.replace(/^qoder\//, "");
-        const alreadyExists = customModels.some(
-          (entry) => entry.providerAlias === providerStorageAlias && entry.id === cleanModelId && (entry.kind || entry.type || "llm") === "llm"
-        ) || Object.values(modelAliases).includes(`${providerStorageAlias}/${cleanModelId}`);
-        if (alreadyExists) {
-          continue;
-        }
-
-        await handleAddCustomModel(cleanModelId, "llm", providerStorageAlias);
-        importedCount += 1;
-      }
-      
-      if (importedCount === 0) {
-        alert(translate("All models already exist, no new models added"));
-      } else {
-        alert(translate("Successfully added") + ` ${importedCount} ` + translate("models"));
-      }
-    } catch (error) {
-      console.log("Error importing Qoder models:", error);
-      alert(translate("Error fetching models") + ": " + error.message);
-    } finally {
-      setImportingQoderModels(false);
-    }
-  };
-
   const handleRunOneByOneTest = async (selectedOnly = false) => {
     if (oneByOneRunning) return;
     // With no explicit selection → test every connection. With a selection →
@@ -838,11 +782,6 @@ export default function ProviderDetailPage() {
   const handleOAuthSuccess = () => {
     fetchConnections();
     setShowOAuthModal(false);
-  };
-
-  const handleIFlowCookieSuccess = () => {
-    fetchConnections();
-    setShowIFlowCookieModal(false);
   };
 
   const handleSaveApiKey = async (formData) => {
@@ -1355,20 +1294,6 @@ export default function ProviderDetailPage() {
           Add Model
         </button>
 
-        {/* Import Qoder models button — only show for qoder provider */}
-        {providerId === "qoder" && connections.some((conn) => conn.isActive !== false) && (
-          <button
-            onClick={handleImportQoderModels}
-            disabled={importingQoderModels}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-500/40 px-3 py-2 text-xs text-blue-600 dark:text-blue-400 transition-colors hover:border-blue-500 hover:bg-blue-500/5 sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span className="material-symbols-outlined text-sm" style={importingQoderModels ? { animation: "spin 1s linear infinite" } : undefined}>
-              {importingQoderModels ? "progress_activity" : "download"}
-            </span>
-            {importingQoderModels ? translate("Fetching...") : translate("Fetch Qoder Models")}
-          </button>
-        )}
-
         {/* Suggested models from provider API — show only models not yet added */}
         {suggestedModels.length > 0 && (() => {
           const addedFullModels = new Set([
@@ -1757,25 +1682,13 @@ export default function ProviderDetailPage() {
                     </Button>
                   </>
                 ) : (
-                  <>
-                    {!isCompatible && providerId === "iflow" && (
-                      <Button size="sm" icon="cookie" variant="secondary" onClick={() => setShowIFlowCookieModal(true)}>
-                        Cookie
-                      </Button>
-                    )}
-                    {providerId === "codex" && (
-                      <Button size="sm" icon="playlist_add" variant="secondary" onClick={() => setShowBulkImportCodex(true)}>
-                        {translate("Bulk Add")}
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      icon="add"
-                      onClick={triggerAddConnection}
-                    >
-                      {isCompatible ? "Add API Key" : (providerId === "iflow" ? "OAuth" : "Add Connection")}
-                    </Button>
-                  </>
+                  <Button
+                    size="sm"
+                    icon="add"
+                    onClick={triggerAddConnection}
+                  >
+                    {isCompatible ? "Add API Key" : "Add Connection"}
+                  </Button>
                 )}
               </div>
             </div>
@@ -1840,18 +1753,6 @@ export default function ProviderDetailPage() {
               {connectionsList}
               {!isCompatible && (
                 <div className="mt-4 grid grid-cols-1 gap-2 sm:flex">
-                  {providerId === "iflow" && (
-                    <Button
-                      size="sm"
-                      icon="cookie"
-                      variant="secondary"
-                      onClick={() => setShowIFlowCookieModal(true)}
-                      title="Add connection using browser cookie"
-                      className="w-full sm:w-auto"
-                    >
-                      Cookie
-                    </Button>
-                  )}
                   {providerId === "codex" && (
                     <Button
                       size="sm"
@@ -2105,42 +2006,13 @@ export default function ProviderDetailPage() {
       {bulkActionModal}
 
       {/* Modals */}
-      {providerId === "kiro" ? (
-        <KiroOAuthWrapper
-          isOpen={showOAuthModal}
-          providerInfo={providerInfo}
-          onSuccess={handleOAuthSuccess}
-          onClose={() => setShowOAuthModal(false)}
-        />
-      ) : providerId === "cursor" ? (
-        <CursorAuthModal
-          isOpen={showOAuthModal}
-          onSuccess={handleOAuthSuccess}
-          onClose={() => setShowOAuthModal(false)}
-        />
-      ) : providerId === "gitlab" ? (
-        <GitLabAuthModal
-          isOpen={showOAuthModal}
-          providerInfo={providerInfo}
-          onSuccess={handleOAuthSuccess}
-          onClose={() => setShowOAuthModal(false)}
-        />
-      ) : (
-        <OAuthModal
-          isOpen={showOAuthModal}
-          provider={providerId}
-          providerInfo={providerInfo}
-          onSuccess={handleOAuthSuccess}
-          onClose={() => setShowOAuthModal(false)}
-        />
-      )}
-      {providerId === "iflow" && (
-        <IFlowCookieModal
-          isOpen={showIFlowCookieModal}
-          onSuccess={handleIFlowCookieSuccess}
-          onClose={() => setShowIFlowCookieModal(false)}
-        />
-      )}
+      <OAuthModal
+        isOpen={showOAuthModal}
+        provider={providerId}
+        providerInfo={providerInfo}
+        onSuccess={handleOAuthSuccess}
+        onClose={() => setShowOAuthModal(false)}
+      />
       <AddApiKeyModal
         isOpen={showAddApiKeyModal}
         provider={providerId}

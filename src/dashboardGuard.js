@@ -40,8 +40,6 @@ const ALWAYS_PROTECTED = [
   "/api/settings/database",
   "/api/version/shutdown",
   "/api/version/update",
-  "/api/oauth/cursor/auto-import",
-  "/api/oauth/kiro/auto-import",
 ];
 
 // Require auth, but allow through if requireLogin is disabled
@@ -50,13 +48,13 @@ const PROTECTED_API_PATHS = [
   "/api/keys",
   "/api/providers",
   "/api/provider-nodes",
+  "/api/integrations",
   "/api/proxy-pools",
   "/api/combos",
   "/api/models",
   "/api/usage",
   "/api/oauth",
   "/api/cloud",
-  "/api/media-providers",
   "/api/pricing",
   "/api/tags",
   "/api/mcp",
@@ -73,8 +71,6 @@ const LOCAL_ONLY_PATHS = [
   "/api/tunnel/tailscale-check",
   "/api/tunnel/enable",
   "/api/tunnel/disable",
-  "/api/oauth/cursor/auto-import",
-  "/api/oauth/kiro/auto-import",
   "/api/auth/reset-password",
 ];
 

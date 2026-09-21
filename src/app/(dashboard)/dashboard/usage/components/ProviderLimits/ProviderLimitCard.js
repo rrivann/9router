@@ -37,15 +37,10 @@ export default function ProviderLimitCard({
     }
   };
 
-  // Get provider info from config
   const getProviderColor = () => {
     const colors = {
-      github: "#000000",
-      antigravity: "#4285F4",
-      codex: "#10A37F",
-      kiro: "#FF9900",
-      qoder: "#EC4899",
-      claude: "#D97757",
+      codebuddy: "#7C3AED",
+      "codebuddy-cn": "#006EFF",
     };
     return colors[provider?.toLowerCase()] || "#6B7280";
   };

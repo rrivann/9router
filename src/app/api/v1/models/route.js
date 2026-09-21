@@ -369,10 +369,10 @@ export async function buildModelsList(kindFilter, options = {}) {
           object: "model",
           owned_by: outputAlias,
         };
-        // Live-catalog resolvers (kiro/qoder/github/clinepass) mostly only return
-        // { id, name } — no per-model capability data. Fall back to the same
-        // pattern-matched capabilities the dashboard uses (useModelCaps.js) so
-        // dynamically-discovered LLM models still surface vision/reasoning/search/tools.
+        // Live-catalog resolvers mostly only return { id, name } — no per-model
+        // capability data. Fall back to the same pattern-matched capabilities the
+        // dashboard uses (useModelCaps.js) so dynamically-discovered LLM models
+        // still surface vision/reasoning/search/tools.
         const caps = liveCapabilitiesById.get(modelId)
           || capabilitiesFromServiceKind(customKind || liveKind)
           || (kind === LLM_KIND ? getCapabilitiesForModel(providerId, modelId) : null);
