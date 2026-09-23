@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "75a1a60e85e9456bb484d40be1f7830208a8f5a6",
-    "indexed_at": "2026-09-23T06:55:03Z",
+    "commit": "cd77551c5862aeedc2631b6d4b0a71583106374f",
+    "indexed_at": "2026-09-23T09:46:01Z",
     "project": "9router",
-    "nodes": 19587,
-    "edges": 31886,
-    "original_size": 18153472,
-    "compressed_size": 3789539,
-    "compression_level": 9
+    "nodes": 18192,
+    "edges": 28161,
+    "original_size": 19070976,
+    "compressed_size": 2887685,
+    "compression_level": 3
 }
