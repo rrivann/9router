@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "8e78f7e1d6019c23499f2f4059b9729d0f5a48a1",
-    "indexed_at": "2026-09-21T11:47:25Z",
-    "project": "Users-rivanalbaniray-Documents-github-9router",
+    "commit": "75a1a60e85e9456bb484d40be1f7830208a8f5a6",
+    "indexed_at": "2026-09-23T06:55:03Z",
+    "project": "9router",
     "nodes": 19587,
-    "edges": 31876,
-    "original_size": 23396352,
-    "compressed_size": 3836830,
+    "edges": 31886,
+    "original_size": 18153472,
+    "compressed_size": 3789539,
     "compression_level": 9
 }

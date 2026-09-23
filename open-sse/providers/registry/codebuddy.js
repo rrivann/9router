@@ -55,11 +55,15 @@ export default {
   //   toolCalls        — supports OpenAI-style tool_calls
   models: [
     // ── Alias tier (routes to backend-chosen model) ─────────────────
-    { id: "default-model", name: "Auto ⭐default", maxInputTokens: 176000, maxOutputTokens: 24000, creditMultiplier: 1, images: true, toolCalls: true },
-    { id: "fast-model", name: "Fast", maxInputTokens: 200000, maxOutputTokens: 32000, creditMultiplier: 0.34, thinking: true, thinkingToggle: "onlyReasoning", effort: "low→max (5 level)", images: true, toolCalls: true },
-    { id: "balanced-model", name: "Balanced", maxInputTokens: 256000, maxOutputTokens: 32000, creditMultiplier: 0.59, thinking: true, thinkingToggle: "onlyReasoning", effort: "low→max (5 level)", images: true, toolCalls: true },
-    { id: "primary-model", name: "Primary", maxInputTokens: 272000, maxOutputTokens: 72000, creditMultiplier: 3.31, thinking: true, thinkingToggle: "onlyReasoning", effort: "low→xhigh", images: true, toolCalls: true },
-    { id: "deep-model", name: "Deep", maxInputTokens: 176000, maxOutputTokens: 24000, creditMultiplier: 3.33, images: true, toolCalls: true },
+    // Live-verified 2026-09-22: CB backend routes these aliases to a
+    // text-only model regardless of the underlying pick, so vision input is
+    // silently dropped. strip:["image","audio"] avoids sending payload the
+    // upstream will discard.
+    { id: "default-model", name: "Auto ⭐default", maxInputTokens: 176000, maxOutputTokens: 24000, creditMultiplier: 1, toolCalls: true, strip: ["image", "audio"] },
+    { id: "fast-model", name: "Fast", maxInputTokens: 200000, maxOutputTokens: 32000, creditMultiplier: 0.34, thinking: true, thinkingToggle: "onlyReasoning", effort: "low→max (5 level)", toolCalls: true, strip: ["image", "audio"] },
+    { id: "balanced-model", name: "Balanced", maxInputTokens: 256000, maxOutputTokens: 32000, creditMultiplier: 0.59, thinking: true, thinkingToggle: "onlyReasoning", effort: "low→max (5 level)", toolCalls: true, strip: ["image", "audio"] },
+    { id: "primary-model", name: "Primary", maxInputTokens: 272000, maxOutputTokens: 72000, creditMultiplier: 3.31, thinking: true, thinkingToggle: "onlyReasoning", effort: "low→xhigh", toolCalls: true, strip: ["image", "audio"] },
+    { id: "deep-model", name: "Deep", maxInputTokens: 176000, maxOutputTokens: 24000, creditMultiplier: 3.33, toolCalls: true, strip: ["image", "audio"] },
 
     // ── Claude family ────────────────────────────────────────────────
     { id: "claude-sonnet-4.6", name: "Claude Sonnet 4.6", maxInputTokens: 176000, maxOutputTokens: 24000, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
@@ -69,7 +73,7 @@ export default {
 
     // ── DeepSeek family ──────────────────────────────────────────────
     { id: "deepseek-v4.1-flash", name: "DeepSeek-V4.1-Flash", maxInputTokens: 1000000, maxOutputTokens: 393216, creditMultiplier: 0, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
-    { id: "deepseek-v3-0324", name: "DeepSeek-V3", maxInputTokens: 128000, maxOutputTokens: 8192, images: true, toolCalls: true, strip: ["image", "audio"] },
+    { id: "deepseek-v3-0324", name: "DeepSeek-V3", maxInputTokens: 128000, maxOutputTokens: 8192, toolCalls: true, strip: ["image", "audio"] },
 
     // ── GPT family ───────────────────────────────────────────────────
     { id: "gpt-6-astra", name: "GPT-6-Astra", maxInputTokens: 272000, maxOutputTokens: 128000, creditMultiplier: 6.67, thinking: true, thinkingToggle: "canDisable", effort: "low→max (5 level)", reasoningLevels: ["low", "medium", "high"], images: true, toolCalls: true },
@@ -84,15 +88,15 @@ export default {
     { id: "gemini-3.5-flash", name: "Gemini-3.5-Flash", maxInputTokens: 1000000, maxOutputTokens: 65000, creditMultiplier: 0.99, effort: "low→max (5 level)", images: true, toolCalls: true },
     { id: "gemini-3.1-pro", name: "Gemini-3.1-Pro", maxInputTokens: 1000000, maxOutputTokens: 65536, reasoningLevels: ["low", "high"], images: true, toolCalls: true },
 
-    // ── GLM family ───────────────────────────────────────────────────
-    { id: "glm-5.3-flash", name: "GLM-5.3-Flash", maxInputTokens: 1000000, maxOutputTokens: 128000, creditMultiplier: 0.06, thinking: true, thinkingToggle: "canDisable", effort: "low→max (5 level)", images: true, toolCalls: true, strip: ["image", "audio"] },
-    { id: "glm-5.3", name: "GLM-5.3", maxInputTokens: 1000000, maxOutputTokens: 128000, creditMultiplier: 0.79, thinking: true, thinkingToggle: "canDisable", effort: "low→max (5 level)", reasoningLevels: ["low", "high", "max"], images: true, toolCalls: true, strip: ["image", "audio"] },
-    { id: "glm-5.2", name: "GLM-5.2", maxInputTokens: 1000000, maxOutputTokens: 128000, creditMultiplier: 0.79, thinking: true, thinkingToggle: "canDisable", effort: "low→max (5 level)", reasoningLevels: ["low", "high", "max"], images: true, toolCalls: true, strip: ["image", "audio"] },
+    // ── GLM family (text-only upstream, live-verified 2026-09-22) ────
+    { id: "glm-5.3-flash", name: "GLM-5.3-Flash", maxInputTokens: 1000000, maxOutputTokens: 128000, creditMultiplier: 0.06, thinking: true, thinkingToggle: "canDisable", effort: "low→max (5 level)", toolCalls: true, strip: ["image", "audio"] },
+    { id: "glm-5.3", name: "GLM-5.3", maxInputTokens: 1000000, maxOutputTokens: 128000, creditMultiplier: 0.79, thinking: true, thinkingToggle: "canDisable", effort: "low→max (5 level)", reasoningLevels: ["low", "high", "max"], toolCalls: true, strip: ["image", "audio"] },
+    { id: "glm-5.2", name: "GLM-5.2", maxInputTokens: 1000000, maxOutputTokens: 128000, creditMultiplier: 0.79, thinking: true, thinkingToggle: "canDisable", effort: "low→max (5 level)", reasoningLevels: ["low", "high", "max"], toolCalls: true, strip: ["image", "audio"] },
 
-    // ── Tencent Hunyuan family ───────────────────────────────────────
-    { id: "hy4-preview-f", name: "Hy4 preview F", maxInputTokens: 1000000, maxOutputTokens: 64000, creditMultiplier: 0, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
-    { id: "hy4-preview", name: "Hy4 preview", maxInputTokens: 1000000, maxOutputTokens: 64000, creditMultiplier: 0.29, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
-    { id: "hy3", name: "Hy3", maxInputTokens: 192000, maxOutputTokens: 64000, creditMultiplier: 0, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
+    // ── Tencent Hunyuan family (text-only, live-verified 2026-09-22) ─
+    { id: "hy4-preview-f", name: "Hy4 preview F", maxInputTokens: 1000000, maxOutputTokens: 64000, creditMultiplier: 0, thinking: true, effort: "low→max (5 level)", toolCalls: true, strip: ["image", "audio"] },
+    { id: "hy4-preview", name: "Hy4 preview", maxInputTokens: 1000000, maxOutputTokens: 64000, creditMultiplier: 0.29, thinking: true, effort: "low→max (5 level)", toolCalls: true, strip: ["image", "audio"] },
+    { id: "hy3", name: "Hy3", maxInputTokens: 192000, maxOutputTokens: 64000, creditMultiplier: 0, thinking: true, effort: "low→max (5 level)", toolCalls: true, strip: ["image", "audio"] },
 
     // ── Kimi family ──────────────────────────────────────────────────
     { id: "kimi-k3", name: "Kimi-K3", maxInputTokens: 1000000, maxOutputTokens: 262144, creditMultiplier: 1.62, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
