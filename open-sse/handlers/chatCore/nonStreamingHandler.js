@@ -1,7 +1,6 @@
 import { FORMATS } from "../../translator/formats.js";
 import { needsTranslation } from "../../translator/index.js";
 import { fromOpenAIFinish } from "../../translator/concerns/finishReason.js";
-import { ollamaBodyToOpenAI } from "../../translator/response/ollama-to-openai.js";
 import { addBufferToUsage, filterUsageForFormat } from "../../utils/usageTracking.js";
 import { createErrorResult } from "../../utils/error.js";
 import { HTTP_STATUS } from "../../config/runtimeConfig.js";
@@ -70,67 +69,6 @@ export function translateNonStreamingResponse(responseBody, targetFormat, source
   }
   if (targetFormat === FORMATS.OPENAI) return responseBody;
 
-  // Gemini / Antigravity
-  if (targetFormat === FORMATS.GEMINI || targetFormat === FORMATS.ANTIGRAVITY || targetFormat === FORMATS.GEMINI_CLI || targetFormat === FORMATS.VERTEX) {
-    const response = responseBody.response || responseBody;
-    if (!response?.candidates?.[0]) return responseBody;
-
-    const candidate = response.candidates[0];
-    const content = candidate.content;
-    const usage = response.usageMetadata || responseBody.usageMetadata;
-    let textContent = "", reasoningContent = "";
-    const toolCalls = [];
-
-    if (content?.parts) {
-      for (const part of content.parts) {
-        if (part.thought === true && part.text) reasoningContent += part.text;
-        else if (part.text !== undefined) textContent += part.text;
-        if (part.functionCall) {
-          toolCalls.push({
-            id: `call_${part.functionCall.name}_${Date.now()}_${toolCalls.length}`,
-            type: "function",
-            function: { name: part.functionCall.name, arguments: JSON.stringify(part.functionCall.args || {}) }
-          });
-        }
-        // Handle inline image data (from image generation models)
-        const inlineData = part.inlineData || part.inline_data;
-        if (inlineData?.data) {
-          const mimeType = inlineData.mimeType || inlineData.mime_type || "image/png";
-          textContent += `\n![image](data:${mimeType};base64,${inlineData.data})\n`;
-        }
-      }
-    }
-
-    const message = { role: "assistant" };
-    if (textContent) message.content = textContent;
-    if (reasoningContent) message.reasoning_content = reasoningContent;
-    if (toolCalls.length > 0) message.tool_calls = toolCalls;
-    if (!message.content && !message.tool_calls) message.content = "";
-
-    let finishReason = (candidate.finishReason || "stop").toLowerCase();
-    if (finishReason === "stop" && toolCalls.length > 0) finishReason = "tool_calls";
-
-    const result = {
-      id: `chatcmpl-${response.responseId || Date.now()}`,
-      object: "chat.completion",
-      created: Math.floor(new Date(response.createTime || Date.now()).getTime() / 1000),
-      model: response.modelVersion || "gemini",
-      choices: [{ index: 0, message, finish_reason: finishReason }]
-    };
-
-    if (usage) {
-      result.usage = {
-        prompt_tokens: (usage.promptTokenCount || 0) + (usage.thoughtsTokenCount || 0),
-        completion_tokens: usage.candidatesTokenCount || 0,
-        total_tokens: usage.totalTokenCount || 0
-      };
-      if (usage.thoughtsTokenCount > 0) {
-        result.usage.completion_tokens_details = { reasoning_tokens: usage.thoughtsTokenCount };
-      }
-    }
-    return result;
-  }
-
   // Claude
   if (targetFormat === FORMATS.CLAUDE) {
     // Always translate a Claude-format body to OpenAI, even if `content` is
@@ -185,11 +123,6 @@ export function translateNonStreamingResponse(responseBody, targetFormat, source
       };
     }
     return result;
-  }
-
-  // Ollama
-  if (targetFormat === FORMATS.OLLAMA) {
-    return ollamaBodyToOpenAI(responseBody);
   }
 
   return responseBody;

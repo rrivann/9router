@@ -179,29 +179,18 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, pr
       }));
       const hasToolCalls = toolCalls.length > 0;
 
-      if (sourceFormat === FORMATS.ANTIGRAVITY || sourceFormat === FORMATS.GEMINI || sourceFormat === FORMATS.GEMINI_CLI) {
-        finalResp = {
-          response: {
-            candidates: [{ content: { role: "model", parts: [{ text: textContent || "" }] }, finishReason: "STOP", index: 0 }],
-            usageMetadata: { promptTokenCount: inTokens, candidatesTokenCount: outTokens, totalTokenCount: inTokens + outTokens },
-            modelVersion: model,
-            responseId: jsonResponse.id || `resp_${Date.now()}`
-          }
-        };
-      } else {
-        const message = { role: "assistant", content: textContent || (hasToolCalls ? null : "") };
-        if (hasToolCalls) message.tool_calls = toolCalls;
-        const responseDone = jsonResponse.status === "completed" || jsonResponse.status === "done";
-        const finishReason = hasToolCalls ? "tool_calls" : (responseDone ? "stop" : (jsonResponse.status || "stop"));
-        finalResp = {
-          id: jsonResponse.id || `chatcmpl-${Date.now()}`,
-          object: "chat.completion",
-          created: jsonResponse.created_at || Math.floor(Date.now() / 1000),
-          model: jsonResponse.model || model,
-          choices: [{ index: 0, message, finish_reason: finishReason }],
-          usage: { prompt_tokens: inTokens, completion_tokens: outTokens, total_tokens: inTokens + outTokens, ...cacheDetails }
-        };
-      }
+      const message = { role: "assistant", content: textContent || (hasToolCalls ? null : "") };
+      if (hasToolCalls) message.tool_calls = toolCalls;
+      const responseDone = jsonResponse.status === "completed" || jsonResponse.status === "done";
+      const finishReason = hasToolCalls ? "tool_calls" : (responseDone ? "stop" : (jsonResponse.status || "stop"));
+      finalResp = {
+        id: jsonResponse.id || `chatcmpl-${Date.now()}`,
+        object: "chat.completion",
+        created: jsonResponse.created_at || Math.floor(Date.now() / 1000),
+        model: jsonResponse.model || model,
+        choices: [{ index: 0, message, finish_reason: finishReason }],
+        usage: { prompt_tokens: inTokens, completion_tokens: outTokens, total_tokens: inTokens + outTokens, ...cacheDetails }
+      };
 
       return { success: true, response: new Response(JSON.stringify(finalResp), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }) };
     } catch (err) {

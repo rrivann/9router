@@ -73,13 +73,8 @@ export function filterUsageForFormat(usage, targetFormat) {
   // Define allowed fields for each format
   const formatFields = {
     [FORMATS.CLAUDE]: [
-      'input_tokens', 'output_tokens', 
+      'input_tokens', 'output_tokens',
       'cache_read_input_tokens', 'cache_creation_input_tokens',
-      'estimated'
-    ],
-    [FORMATS.GEMINI]: [
-      'promptTokenCount', 'candidatesTokenCount', 'totalTokenCount',
-      'cachedContentTokenCount', 'thoughtsTokenCount',
       'estimated'
     ],
     [FORMATS.OPENAI_RESPONSES]: [
@@ -87,7 +82,7 @@ export function filterUsageForFormat(usage, targetFormat) {
       'input_tokens_details', 'output_tokens_details',
       'estimated'
     ],
-    // OpenAI format (default for OPENAI, CODEX, KIRO, etc.)
+    // 0penAI format
     default: [
       'prompt_tokens', 'completion_tokens', 'total_tokens',
       'cached_tokens', 'reasoning_tokens',
@@ -96,52 +91,9 @@ export function filterUsageForFormat(usage, targetFormat) {
     ]
   };
 
-  // Get fields for target format
-  let fields = formatFields[targetFormat];
-  
-  // Use same fields for similar formats
-  if (targetFormat === FORMATS.GEMINI_CLI || targetFormat === FORMATS.ANTIGRAVITY) {
-    fields = formatFields[FORMATS.GEMINI];
-  } else if (targetFormat === FORMATS.OPENAI_RESPONSE) {
-    fields = formatFields[FORMATS.OPENAI_RESPONSES];
-  } else if (!fields) {
-    fields = formatFields.default;
-  }
+  const fields = formatFields[targetFormat] || formatFields.default;
 
   return pickFields(fields);
-}
-
-/**
- * Normalize usage object - ensure all values are valid numbers
- */
-export function normalizeUsage(usage) {
-  if (!usage || typeof usage !== "object" || Array.isArray(usage)) return null;
-
-  const normalized = {};
-  const assignNumber = (key, value) => {
-    if (value === undefined || value === null) return;
-    const numeric = Number(value);
-    if (Number.isFinite(numeric)) normalized[key] = numeric;
-  };
-
-  assignNumber("prompt_tokens", usage?.prompt_tokens);
-  assignNumber("completion_tokens", usage?.completion_tokens);
-  assignNumber("total_tokens", usage?.total_tokens);
-  assignNumber("cache_read_input_tokens", usage?.cache_read_input_tokens);
-  assignNumber("cache_creation_input_tokens", usage?.cache_creation_input_tokens);
-  assignNumber("cached_tokens", usage?.cached_tokens);
-  assignNumber("reasoning_tokens", usage?.reasoning_tokens);
-
-  // Preserve nested details objects for OpenAI format forwarding
-  if (usage?.prompt_tokens_details && typeof usage.prompt_tokens_details === "object") {
-    normalized.prompt_tokens_details = usage.prompt_tokens_details;
-  }
-  if (usage?.completion_tokens_details && typeof usage.completion_tokens_details === "object") {
-    normalized.completion_tokens_details = usage.completion_tokens_details;
-  }
-
-  if (Object.keys(normalized).length === 0) return null;
-  return normalized;
 }
 
 /**

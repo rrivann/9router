@@ -101,15 +101,6 @@ function applyFiltersToStringWithStats(text, filters, statsMap) {
 }
 
 /**
- * Backwards-compat plain string filter (no stats). Kept because tests + some
- * callers pass a plain string and don't care about hit tracking.
- */
-export function applyFiltersToString(text, filters) {
-  const stats = new Map();
-  return applyFiltersToStringWithStats(text, filters, stats);
-}
-
-/**
  * Rewrite the text of every message in a chat/completions-style `messages`
  * array. Returns { messages, applied } where `applied` is an array of
  * { pattern, replacement, hits } for every rule that fired at least once.
@@ -142,33 +133,3 @@ export function applyFiltersToMessages(messages, filters) {
   return { messages: next, applied: [...stats.values()] };
 }
 
-/**
- * Rewrite the text of every item in a Responses API `input` array. Same
- * return shape as applyFiltersToMessages.
- */
-export function applyFiltersToInput(input, filters) {
-  if (!Array.isArray(input) || !filters || filters.length === 0) {
-    return { input, applied: [] };
-  }
-  const stats = new Map();
-  const next = input.map((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return item;
-    if (typeof item.content === "string") {
-      return { ...item, content: applyFiltersToStringWithStats(item.content, filters, stats) };
-    }
-    if (Array.isArray(item.content)) {
-      return {
-        ...item,
-        content: item.content.map((part) => {
-          if (!part || typeof part !== "object") return part;
-          if (typeof part.text === "string") {
-            return { ...part, text: applyFiltersToStringWithStats(part.text, filters, stats) };
-          }
-          return part;
-        }),
-      };
-    }
-    return item;
-  });
-  return { input: next, applied: [...stats.values()] };
-}

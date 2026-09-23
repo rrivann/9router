@@ -5,7 +5,6 @@ import { cloakClaudeTools } from "../utils/claudeCloaking.js";
 import { filterToOpenAIFormat } from "./formats/openai.js";
 import { normalizeThinkingConfig } from "../services/provider.js";
 import { applyThinking, captureThinking } from "./concerns/thinkingUnified.js";
-import { captureSessionId } from "../utils/sessionManager.js";
 import { PROVIDERS } from "../providers/index.js";
 
 // Registry for translators. Lazy-init guards against circular-import order:
@@ -68,11 +67,6 @@ export function translateRequest(sourceFormat, targetFormat, model, body, stream
   // format conversion strips/renames the fields. Applied after translation.
   const thinkingIntent = captureThinking(result);
 
-  // Capture session id from the original body (envelope still intact, e.g. antigravity request.sessionId)
-  const clientSessionId = captureSessionId(result, credentials, connectionId, targetFormat);
-  // Expose to downstream translators (gemini-cli/antigravity envelopes) that run after envelope is stripped
-  if (credentials) credentials._clientSessionId = clientSessionId;
-
   // If same format, skip translation steps
   if (sourceFormat !== targetFormat) {
     // Direct route: if a translator is registered for this exact source:target
@@ -103,15 +97,7 @@ export function translateRequest(sourceFormat, targetFormat, model, body, stream
   }
 
   // Normalize thinking to the target provider-native format (config-driven, capability-aware).
-  // Kiro's GenerateAssistantResponse request does not accept the generic top-level
-  // `thinking` field; its translators map thinking intent to KAS-compatible
-  // systemPrompt/additionalModelRequestFields instead.
-  const kiroThinkingMappedByTranslator =
-    targetFormat === FORMATS.KIRO &&
-    (sourceFormat === FORMATS.OPENAI || sourceFormat === FORMATS.CLAUDE);
-  if (!kiroThinkingMappedByTranslator) {
-    applyThinking(targetFormat, model, result, provider, thinkingIntent);
-  }
+  applyThinking(targetFormat, model, result, provider, thinkingIntent);
 
   // Always normalize to clean OpenAI format when target is OpenAI
   // This handles hybrid requests (e.g., OpenAI messages + Claude tools)
@@ -123,8 +109,7 @@ export function translateRequest(sourceFormat, targetFormat, model, body, stream
 
   // Final step: prepare request for Claude format endpoints
   if (targetFormat === FORMATS.CLAUDE) {
-    const apiKey = credentials?.accessToken || credentials?.apiKey || null;
-    result = prepareClaudeRequest(result, provider, apiKey, connectionId, credentials?.rawHeaders, clientSessionId);
+    result = prepareClaudeRequest(result, provider);
   }
 
   // Claude cloaking: rename client tools with _cc suffix (anti-ban)
@@ -139,15 +124,6 @@ export function translateRequest(sourceFormat, targetFormat, model, body, stream
       }
     }
   }
-
-  // Antigravity cloaking disabled
-  // if (provider === FORMATS.ANTIGRAVITY && body.userAgent !== FORMATS.ANTIGRAVITY) {
-  //   const { cloakedBody, toolNameMap } = AntigravityExecutor.cloakTools(result);
-  //   result = cloakedBody;
-  //   if (toolNameMap?.size > 0) {
-  //     result._toolNameMap = toolNameMap;
-  //   }
-  // }
 
   return result;
 }
@@ -269,23 +245,7 @@ export function initTranslators() {
 // Static side-effect imports: each module calls register() at load (works in ESM + bundler).
 import "./request/claude-to-openai.js";
 import "./request/openai-to-claude.js";
-import "./request/gemini-to-openai.js";
-import "./request/openai-to-gemini.js";
-import "./request/openai-to-vertex.js";
-import "./request/antigravity-to-openai.js";
 import "./request/openai-responses.js";
-import "./request/openai-to-kiro.js";
-import "./request/openai-to-cursor.js";
-import "./request/openai-to-ollama.js";
-import "./request/openai-to-commandcode.js";
-import "./request/claude-to-kiro.js";
 import "./response/claude-to-openai.js";
 import "./response/openai-to-claude.js";
-import "./response/gemini-to-openai.js";
-import "./response/openai-to-antigravity.js";
 import "./response/openai-responses.js";
-import "./response/kiro-to-openai.js";
-import "./response/cursor-to-openai.js";
-import "./response/ollama-to-openai.js";
-import "./response/commandcode-to-openai.js";
-import "./response/kiro-to-claude.js";

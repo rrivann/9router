@@ -1,8 +1,5 @@
 import { PROVIDER_OAUTH } from "./providers.js";
 
-// Internal anti-loop header
-export const INTERNAL_REQUEST_HEADER = { name: "x-request-source", value: "local" };
-
 // Suffix added to client tools when forwarding to Claude provider (anti-ban cloaking).
 export const CLAUDE_TOOL_SUFFIX = "_ide";
 

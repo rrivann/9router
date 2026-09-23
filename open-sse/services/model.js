@@ -1,25 +1,12 @@
 import REGISTRY from "../providers/registry/index.js";
 
 // Alias→id derived from registry single-source: id→id, alias→id, aliases[]→id.
-// Media-only providers without a registry transport entry keep explicit aliases here.
-const MEDIA_ONLY_ALIASES = {
-  el: "elevenlabs",
-  jina: "jina-ai",
-  "jina-ai": "jina-ai",
-  polly: "aws-polly",
-  "aws-polly": "aws-polly",
-};
-
-const ALIAS_TO_PROVIDER_ID = { ...MEDIA_ONLY_ALIASES };
+const ALIAS_TO_PROVIDER_ID = {};
 for (const entry of REGISTRY) {
   ALIAS_TO_PROVIDER_ID[entry.id] = entry.id;
   if (entry.alias) ALIAS_TO_PROVIDER_ID[entry.alias] = entry.id;
   for (const a of entry.aliases || []) ALIAS_TO_PROVIDER_ID[a] = entry.id;
 }
-
-const BUILTIN_MODEL_ALIASES = {
-  "grok-build": "gcli/grok-build",
-};
 
 /**
  * Resolve provider alias to provider ID
@@ -108,35 +95,11 @@ export async function getModelInfoCore(modelStr, aliasesOrGetter) {
       : aliasesOrGetter;
 
   // Resolve alias
-  const resolved =
-    resolveModelAliasFromMap(parsed.model, aliases) ||
-    resolveModelAliasFromMap(parsed.model, BUILTIN_MODEL_ALIASES);
+  const resolved = resolveModelAliasFromMap(parsed.model, aliases);
   if (resolved) {
     return resolved;
   }
 
-  // Fallback: infer provider from model name prefix
-  return {
-    provider: inferProviderFromModelName(parsed.model),
-    model: parsed.model,
-  };
-}
-
-// Config-driven prefix → provider inference (first match wins, fallback "openai").
-const MODEL_PREFIX_PROVIDERS = [
-  [/^claude-/, "anthropic"],
-  [/^gemini-/, "gemini"],
-  [/^gpt-/, "openai"],
-  [/^o[134]/, "openai"],
-  [/^deepseek-/, "openrouter"],
-];
-
-/**
- * Infer provider from model name prefix
- * Used as fallback when no provider prefix or alias is given
- */
-function inferProviderFromModelName(modelName) {
-  if (!modelName) return "openai";
-  const m = modelName.toLowerCase();
-  return MODEL_PREFIX_PROVIDERS.find(([re]) => re.test(m))?.[1] || "openai";
+  // No provider prefix + no alias match: caller must handle unresolved model.
+  return { provider: null, model: parsed.model };
 }

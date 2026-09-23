@@ -15,16 +15,9 @@ const L = {
   hiMax: ["none", "high", "max"],                                             // deepseek (low/med→high, xhigh→max)
 };
 
-// Providers whose OpenAI-compatible gateway extends reasoning_effort with "max"
+// Providers whose 0penAI-compatible gateway extends reasoning_effort with "max"
 // (mirrors OPENAI_MAX_EFFORT_PROVIDERS in translator/concerns/thinkingUnified.js).
-const OPENAI_MAX_PROVIDERS = new Set(["codebuddy", "codebuddy-cn", "qwencloud"]);
-
-// Per-model exceptions: models on OPENAI_MAX_PROVIDERS providers that still cap
-// at "xhigh" (upstream rejects "max"). Mirrors OPENAI_MAX_MODEL_EXCEPTIONS in
-// translator/concerns/thinkingUnified.js.
-const OPENAI_MAX_MODEL_EXCEPTIONS = new Set([
-  "qwencloud:qwen3.7-max",
-]);
+const OPENAI_MAX_PROVIDERS = new Set(["codebuddy", "codebuddy-cn"]);
 
 // thinkingFormat → valid selectable levels (source of truth for UI options).
 const FORMAT_LEVELS = {
@@ -47,7 +40,6 @@ const FORMAT_LEVELS = {
 // `provider` field match any provider (global fallback).
 const PATTERN_THINKING = [
   { pattern: "*gpt-5.6-sol*", levels: ["none", "minimal", "low", "medium", "high", "xhigh", "max"] },
-  { pattern: "*codex*", levels: ["low", "medium", "high", "xhigh"] }, // codex cannot disable thinking
   // GPT-6 Astra: same effort set as GPT-5.6 Sol (accepts max).
   { pattern: "*gpt-6*", levels: ["none", "minimal", "low", "medium", "high", "xhigh", "max"] },
   // codebuddy-cn per-model effort sets — the server's product-config payload
@@ -79,7 +71,6 @@ export function getThinkingLevels(provider, model) {
     !hit
     && caps.thinkingFormat === "openai"
     && OPENAI_MAX_PROVIDERS.has(provider)
-    && !OPENAI_MAX_MODEL_EXCEPTIONS.has(`${provider}:${model}`)
   ) {
     levels = L.openaiMax;
   }

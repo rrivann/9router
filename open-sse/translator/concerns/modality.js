@@ -18,15 +18,6 @@ const PLACEHOLDER_PREV = {
 };
 const ph = (cap, isLast) => (isLast ? PLACEHOLDER_CURRENT : PLACEHOLDER_PREV)[cap];
 
-// Map gemini inlineData/fileData mime prefix -> capability it requires.
-function capForMime(mime) {
-  if (typeof mime !== "string") return null;
-  if (mime.startsWith("image/")) return "vision";
-  if (mime.startsWith("audio/")) return "audioInput";
-  if (mime === "application/pdf") return "pdf";
-  return null;
-}
-
 // OpenAI chat content block -> required capability (null = plain text/other, keep).
 function capForOpenAIBlock(block) {
   const t = block?.type;
@@ -95,23 +86,6 @@ function stripResponses(body, caps) {
   });
 }
 
-// Gemini / gemini-cli contents[].parts[] (inlineData / fileData by mime).
-function stripGeminiParts(contents, caps) {
-  if (!Array.isArray(contents)) return;
-  const last = contents.length - 1;
-  contents.forEach((c, i) => {
-    if (!Array.isArray(c.parts)) return;
-    const removed = new Set();
-    c.parts = c.parts.filter((p) => {
-      const mime = p?.inlineData?.mimeType || p?.fileData?.mimeType;
-      const cap = capForMime(mime);
-      if (cap && caps[cap] === false) { removed.add(cap); return false; }
-      return true;
-    });
-    for (const cap of removed) c.parts.push({ text: ph(cap, i === last) });
-  });
-}
-
 /**
  * Remove media blocks the model can't read, in-place on the source-format body.
  * @param {object} body - request body (source format)
@@ -125,28 +99,11 @@ export function stripUnsupportedModalities(body, sourceFormat, caps) {
   if (caps.vision !== false && caps.audioInput !== false && caps.pdf !== false) return false;
 
   switch (sourceFormat) {
-    case FORMATS.OPENAI:
-    case FORMATS.OLLAMA:
-    case FORMATS.KIRO:
-    case FORMATS.CURSOR:
-    case FORMATS.COMMANDCODE:
-      stripOpenAI(body, caps);
-      break;
     case FORMATS.CLAUDE:
       stripClaude(body, caps);
       break;
     case FORMATS.OPENAI_RESPONSES:
-    case FORMATS.OPENAI_RESPONSE:
-    case FORMATS.CODEX:
       stripResponses(body, caps);
-      break;
-    case FORMATS.GEMINI:
-    case FORMATS.GEMINI_CLI:
-    case FORMATS.VERTEX:
-      stripGeminiParts(body.contents, caps);
-      break;
-    case FORMATS.ANTIGRAVITY:
-      stripGeminiParts(body?.request?.contents, caps);
       break;
     default:
       stripOpenAI(body, caps);

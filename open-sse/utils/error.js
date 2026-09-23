@@ -6,7 +6,7 @@ import { ERROR_TYPES, DEFAULT_ERROR_MESSAGES } from "../config/errorConfig.js";
  * @param {string} message - Error message
  * @returns {object} Error response object
  */
-export function buildErrorBody(statusCode, message) {
+function buildErrorBody(statusCode, message) {
   const errorInfo = ERROR_TYPES[statusCode] || 
     (statusCode >= 500 
       ? { type: "server_error", code: "internal_server_error" }

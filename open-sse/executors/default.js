@@ -1,8 +1,6 @@
 import { BaseExecutor } from "./base.js";
-import { PROVIDERS, PROVIDER_OAUTH } from "../config/providers.js";
+import { PROVIDERS } from "../config/providers.js";
 import { ANTHROPIC_API_VERSION, OPENAI_COMPAT_BASE, ANTHROPIC_COMPAT_BASE } from "../providers/shared.js";
-import { getCachedClaudeHeaders } from "../utils/claudeHeaderCache.js";
-import { proxyAwareFetch } from "../utils/proxyFetch.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { stripUnsupportedParams } from "../translator/concerns/paramSupport.js";
 
@@ -33,43 +31,6 @@ function applyAuth(headers, desc, credentials) {
   else if (credentials.accessToken) setAuth(headers, desc.oauth, credentials.accessToken);
   if (desc.anthropicVersion && !headers["anthropic-version"]) headers["anthropic-version"] = ANTHROPIC_API_VERSION;
 }
-
-// Provider-specific header quirks kept as small hooks (not pure auth).
-const HEADER_HOOKS = {
-  claudeOverlay: (h) => {
-    const cached = getCachedClaudeHeaders();
-    if (!cached) return;
-    for (const lcKey of Object.keys(cached)) {
-      const titleKey = lcKey.replace(/(^|-)([a-z])/g, (_, sep, ch) => sep + ch.toUpperCase());
-      if (lcKey === "anthropic-beta") {
-        const staticBetaStr = h[titleKey] || h[lcKey] || "";
-        const flags = new Set(staticBetaStr.split(",").map(f => f.trim()).filter(Boolean));
-        for (const f of cached[lcKey].split(",").map(f => f.trim()).filter(Boolean)) flags.add(f);
-        cached[lcKey] = Array.from(flags).join(",");
-      }
-      if (titleKey !== lcKey && h[titleKey] !== undefined) delete h[titleKey];
-    }
-    Object.assign(h, cached);
-  },
-};
-
-// Config-driven OAuth refresh grants — derived from registry oauth.refresh.
-const REFRESH_GRANTS = Object.fromEntries(
-  Object.entries(PROVIDER_OAUTH)
-    .filter(([, o]) => o.refresh)
-    .map(([id, o]) => {
-      const tokenUrl = o.tokenUrl;
-      const encoding = o.refresh.encoding;
-      const extraParams = o.refresh.scope ? { scope: o.refresh.scope } : {};
-      return [id, {
-        encoding,
-        url: () => tokenUrl,
-        params: (ex) => id === "gemini"
-          ? { client_id: ex.config.clientId, client_secret: ex.config.clientSecret, ...extraParams }
-          : { client_id: o.clientId, ...extraParams },
-      }];
-    })
-);
 
 // Minimal fallback transport when provider registry entry has been pruned.
 // Requests to any provider outside the whitelist still get sensible defaults
@@ -169,8 +130,6 @@ export class DefaultExecutor extends BaseExecutor {
     const rt = credentials?.runtimeTransport;
     const headers = { "Content-Type": "application/json", ...(rt ? rt.headers : this.config.headers) };
     const desc = rt?.auth || AUTH_DESCRIPTORS[this.provider] || this.resolveAuthDescriptor();
-    // Hooks run BEFORE auth so dynamic overlays (claude cached headers) can't clobber the token.
-    for (const hook of desc.hooks || []) HEADER_HOOKS[hook]?.(headers, credentials);
     applyAuth(headers, desc, credentials);
 
     // Strip first-party Claude Code identity headers for non-Anthropic anthropic-compatible upstreams

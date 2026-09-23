@@ -14,18 +14,6 @@ const MODEL_RULES = [
   { match: m => /deepseek/i.test(m || ""), scope: "all" }
 ];
 
-const DEEPSEEK_V4_PRO = "deepseek-v4-pro";
-const DEEPSEEK_V4_PRO_ALIASES = {
-  [`${DEEPSEEK_V4_PRO}-max`]: {
-    thinkingType: "enabled",
-    reasoningEffort: "max"
-  },
-  [`${DEEPSEEK_V4_PRO}-none`]: {
-    thinkingType: "disabled",
-    reasoningEffort: null
-  }
-};
-
 function shouldInject(message, scope) {
   if (message?.role !== "assistant") return false;
   const rc = message.reasoning_content;
@@ -42,35 +30,9 @@ function applyRule(body, rule) {
   return { ...body, messages };
 }
 
-function applyDeepSeekV4ProAlias({ provider, model, body }) {
-  const alias = DEEPSEEK_V4_PRO_ALIASES[model];
-  if (provider !== "deepseek" || !alias || !body) return body;
-
-  const nextBody = {
-    ...body,
-    model: DEEPSEEK_V4_PRO,
-    extra_body: {
-      ...(body.extra_body || {}),
-      thinking: {
-        ...(body.extra_body?.thinking || {}),
-        type: alias.thinkingType
-      }
-    }
-  };
-
-  if (alias.reasoningEffort) {
-    nextBody.reasoning_effort = alias.reasoningEffort;
-  } else {
-    delete nextBody.reasoning_effort;
-  }
-
-  return nextBody;
-}
-
 export function injectReasoningContent({ provider, model, body }) {
   const providerRule = providerRuleFor(provider);
   const modelRule = MODEL_RULES.find(r => r.match(model));
   const rule = providerRule || modelRule;
-  const nextBody = applyDeepSeekV4ProAlias({ provider, model, body });
-  return applyRule(nextBody, rule);
+  return applyRule(body, rule);
 }

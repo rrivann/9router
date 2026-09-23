@@ -13,7 +13,6 @@ import { HTTP_STATUS, TOKEN_SAVER_HEADER } from "../config/runtimeConfig.js";
 import { handleBypassRequest } from "../utils/bypassHandler.js";
 import { trackPendingRequest, appendRequestLog, saveRequestDetail } from "@/lib/usageDb.js";
 import { getExecutor } from "../executors/index.js";
-import { supportsGrokCliReasoningEffort } from "../config/grokCli.js";
 import { buildRequestDetail, extractRequestConfig } from "./chatCore/requestDetail.js";
 import { handleForcedSSEToJson } from "./chatCore/sseToJsonHandler.js";
 import { handleNonStreamingResponse } from "./chatCore/nonStreamingHandler.js";
@@ -23,7 +22,6 @@ import { dedupeTools } from "../utils/toolDeduper.js";
 import { compressMessages, formatRtkLog } from "../rtk/index.js";
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { stripUnsupportedModalities } from "../translator/concerns/modality.js";
-import { prefetchRemoteImages } from "../translator/concerns/prefetch.js";
 import { extractThinking } from "../translator/concerns/thinkingUnified.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 
@@ -40,7 +38,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // Stable per-session color so all lines of one CLI conversation share a tag
   const sessionSeed = (() => {
     try {
-      return resolveSessionId({ headers: clientRawRequest?.headers, body, connectionId, scope: provider });
+      return resolveSessionId({ headers: clientRawRequest?.headers, body, connectionId });
     } catch {
       return connectionId || "";
     }
@@ -76,16 +74,9 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     }
   }
 
-  const clientRequestedStreaming = body.stream === true || sourceFormat === FORMATS.ANTIGRAVITY || sourceFormat === FORMATS.GEMINI || sourceFormat === FORMATS.GEMINI_CLI;
+  const clientRequestedStreaming = body.stream === true;
   const providerRequiresStreaming = PROVIDERS[provider]?.forceStream === true;
   let stream = providerRequiresStreaming ? true : (body.stream !== false);
-
-  // Image generation models require non-streaming (Google v1internal:generateContent)
-  const modelType = getModelType(alias, model);
-  const isImageGenModel = modelType === "imageGen" || /image|imagen|image-generation/i.test(model);
-  if (isImageGenModel && (provider === "antigravity" || provider === "gemini-cli")) {
-    stream = false;
-  }
 
   // DeepSeek-TUI: interactive TUI panel sends stream:true and needs SSE.
   // Non-interactive mode (-p flag) sends without stream and can't parse SSE.
@@ -121,11 +112,6 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     if (stripUnsupportedModalities(body, sourceFormat, caps)) {
       log?.debug?.("MODALITY", `stripped unsupported media for ${provider}/${model}`);
     }
-    // Convert remote image URLs to base64 for targets that can't fetch URLs.
-    try {
-      const n = await prefetchRemoteImages(body, sourceFormat, targetFormat, { signal: undefined });
-      if (n > 0) log?.debug?.("MODALITY", `prefetched ${n} remote image(s) for ${targetFormat}`);
-    } catch (e) { log?.warn?.("MODALITY", `image prefetch failed: ${e.message}`); }
   }
 
   let translatedBody;
@@ -161,7 +147,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     const msgN = translatedBody.messages?.length || translatedBody.input?.length || translatedBody.contents?.length || body.messages?.length || body.input?.length || 0;
     const toolN = translatedBody.tools?.length || body.tools?.length || 0;
     const fmtStr = passthrough ? `FMT: ${sourceFormat} (passthrough)` : `FMT: ${sourceFormat}→${targetFormat}`;
-    const showThinking = provider !== "grok-cli" || supportsGrokCliReasoningEffort(model);
+    const showThinking = true;
     const think = showThinking ? log.fmtThink?.(extractThinking(translatedBody)) : null;
     const acc = credentials?.connectionName || credentials?.connectionId?.slice(0, 8) || "-";
     const parts = [

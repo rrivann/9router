@@ -2,8 +2,6 @@
 import { DEFAULT_THINKING_CLAUDE_SIGNATURE } from "../../config/defaultThinkingSignature.js";
 import { ROLE, CLAUDE_BLOCK } from "../schema/index.js";
 import { adjustMaxTokens } from "./maxTokens.js";
-import { applyCloaking } from "../../utils/claudeCloaking.js";
-import { resolveSessionId } from "../../utils/sessionManager.js";
 import { isValidClaudeSignature } from "../../utils/claudeSignature.js";
 import { PROVIDERS } from "../../providers/index.js";
 import { getCapabilitiesForModel } from "../../providers/capabilities.js";
@@ -159,23 +157,12 @@ export function fixToolUseOrdering(messages) {
 // Models that reject thinking.type "adaptive" + output_config.effort (Opus 4.5+/Sonnet 4.6+ only)
 const ADAPTIVE_THINKING_UNSUPPORTED = /haiku/i;
 
-function handlesThinkingBlocks(provider) {
-  return provider === "claude" || provider?.startsWith("anthropic-compatible") || provider === "deepseek";
-}
-
-function buildThinkingPlaceholder(provider) {
-  const block = {
+function buildThinkingPlaceholder() {
+  return {
     type: CLAUDE_BLOCK.THINKING,
     thinking: ".",
+    signature: DEFAULT_THINKING_CLAUDE_SIGNATURE,
   };
-
-  // DeepSeek's Anthropic-compatible endpoint requires a thinking block in
-  // thinking mode, but it does not need Anthropic's signed-thinking fallback.
-  if (provider !== "deepseek") {
-    block.signature = DEFAULT_THINKING_CLAUDE_SIGNATURE;
-  }
-
-  return block;
 }
 // Anthropic validates server_tool_use ids against this pattern and rejects the
 // whole request with a 400 when one does not match. A combo that falls back to a
@@ -274,7 +261,7 @@ export function normalizeClaudePassthrough(body, model = "") {
       }
       msg.content = kept;
       if (thinkingEnabled && !hasKeptThinking && hasToolUse) {
-        msg.content.unshift(buildThinkingPlaceholder("claude"));
+        msg.content.unshift(buildThinkingPlaceholder());
       }
     }
   }
@@ -315,7 +302,7 @@ export function normalizeClaudePassthrough(body, model = "") {
 // - Add thinking block for Anthropic endpoint (provider === "claude")
 // - Fix tool_use/tool_result ordering
 // - Apply cloaking (billing header + fake user ID) for OAuth tokens
-export function prepareClaudeRequest(body, provider = null, apiKey = null, connectionId = null, rawHeaders = null, sessionId = null) {
+export function prepareClaudeRequest(body, provider = null) {
   // quirk: MiniMax's Claude-compatible endpoint rejects Anthropic's output_config (400 invalid params)
   if (PROVIDERS[provider]?.quirks?.dropOutputConfig) {
     delete body.output_config;
@@ -411,44 +398,6 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
         }
 
         // Handle thinking blocks for Anthropic-compatible endpoints.
-        if (handlesThinkingBlocks(provider)) {
-          let hasToolUse = false;
-          let hasKeptThinking = false;
-
-          // Claude native: preserve valid signatures, drop invalid blocks.
-          // anthropic-compatible: replace with default (safe fallback for lenient upstreams).
-          // DeepSeek: keep existing thinking as-is; add an unsigned placeholder only if missing.
-          const isClaudeNative = provider === "claude";
-          const isDeepSeek = provider === "deepseek";
-          const kept = [];
-          for (const block of msg.content) {
-            const isThinking = block.type === CLAUDE_BLOCK.THINKING || block.type === CLAUDE_BLOCK.REDACTED_THINKING;
-            if (isThinking) {
-              if (isClaudeNative) {
-                if (isValidClaudeSignature(block.signature)) {
-                  hasKeptThinking = true;
-                  kept.push(block);
-                }
-              } else if (isDeepSeek) {
-                hasKeptThinking = true;
-                kept.push(block);
-              } else {
-                block.signature = DEFAULT_THINKING_CLAUDE_SIGNATURE;
-                hasKeptThinking = true;
-                kept.push(block);
-              }
-              continue;
-            }
-            if (block.type === CLAUDE_BLOCK.TOOL_USE) hasToolUse = true;
-            kept.push(block);
-          }
-          msg.content = kept;
-
-          // Add thinking block if thinking enabled + has tool_use but no thinking
-          if (thinkingEnabled && !hasKeptThinking && hasToolUse) {
-            msg.content.unshift(buildThinkingPlaceholder(provider));
-          }
-        }
       }
     }
   }
@@ -457,21 +406,20 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
   if (body.tools && Array.isArray(body.tools)) {
     // Strip built-in tools (e.g. web_search_20250305) and normalize to Anthropic-native shape
     // (drop `type` field, fold `function.{name,description,parameters}`) for non-Anthropic providers
-    if (provider !== "claude") {
-      body.tools = body.tools
-        .filter(tool => !tool.type || tool.type === "function")
-        .map(tool => {
-          if (tool.function) {
-            return {
-              name: tool.function.name,
-              description: tool.function.description,
-              input_schema: tool.function.parameters,
-            };
-          }
-          const { type, ...rest } = tool;
-          return rest;
-        });
-    }
+    body.tools = body.tools
+      .filter(tool => !tool.type || tool.type === "function")
+      .map(tool => {
+        if (tool.function) {
+          return {
+            name: tool.function.name,
+            description: tool.function.description,
+            input_schema: tool.function.parameters,
+          };
+        }
+        const { type, ...rest } = tool;
+        return rest;
+      });
+    
 
     const lastCacheable = lastCacheableToolIndex(body.tools);
     body.tools = body.tools.map((tool, i) => {
@@ -498,11 +446,6 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
     capCacheControlBlocks(body);
   }
 
-  // session_id in user_id must match X-Claude-Code-Session-Id for fingerprint consistency
-  if ((provider === "claude" || provider?.startsWith("anthropic-compatible")) && apiKey) {
-    const sid = sessionId || resolveSessionId({ headers: rawHeaders, body, connectionId, scope: "claude" });
-    body = applyCloaking(body, apiKey, sid);
-  }
 
   return body;
 }

@@ -6,10 +6,9 @@ import { parseSSELine, hasValuableContent, fixInvalidId, formatSSE } from "./str
 import { getOpenAIResponsesEventName, isOpenAIResponsesTerminalEvent, formatIncompleteOpenAIResponsesStreamFailure } from "./responsesStreamHelpers.js";
 import { dbg, isDebugEnabled } from "./debugLog.js";
 
-import { SSE_DONE, SSE_HEADERS, SSE_HEADERS_NO_BUFFER } from "./sseConstants.js";
+import { SSE_HEADERS } from "./sseConstants.js";
 
 export { COLORS, formatSSE };
-export { SSE_DONE, SSE_HEADERS, SSE_HEADERS_NO_BUFFER };
 
 // sharedEncoder is stateless — safe to share across streams
 const sharedEncoder = new TextEncoder();
@@ -205,7 +204,7 @@ export function createSSEStream(options = {}) {
         // Translate mode
         if (!trimmed) continue;
 
-        const parsed = parseSSELine(trimmed, targetFormat);
+        const parsed = parseSSELine(trimmed);
         if (!parsed) continue;
 
         // Responses API same-format passthrough: preserve event framing + track terminal state
@@ -219,9 +218,8 @@ export function createSSEStream(options = {}) {
           openAIResponsesTerminalSeen = true;
         }
 
-        // For Ollama: done=true is the final chunk with finish_reason/usage, must translate
-        // For other formats: done=true is the [DONE] sentinel, skip
-        if (parsed && parsed.done && targetFormat !== FORMATS.OLLAMA) {
+        // done=true is the [DONE] sentinel; skip translation.
+        if (parsed && parsed.done) {
           // Synthesize response.failed if the Responses stream never sent a terminal event
           if (keepsOpenAIResponsesFormat && !openAIResponsesTerminalSeen) {
             const failedOutput = formatIncompleteOpenAIResponsesStreamFailure();
@@ -366,9 +364,7 @@ export function createSSEStream(options = {}) {
           // Some clients (e.g. OpenClaw) expect the OpenAI-style sentinel:
           //   data: [DONE]\n\n
           // Without it they can hang until timeout and trigger failover.
-          // Gemini-family clients (Antigravity, Vertex, Gemini) reject this sentinel with 400 syntax errors.
-          const isGeminiFamily = provider === "antigravity" || provider === "gemini" || provider === "vertex";
-          if (!streamDoneSent && !isGeminiFamily) {
+          if (!streamDoneSent) {
             const doneOutput = "data: [DONE]\n\n";
             reqLogger?.appendConvertedChunk?.(doneOutput);
             controller.enqueue(sharedEncoder.encode(doneOutput));
