@@ -50,28 +50,3 @@ export const COLORS = {
   },
 };
 
-// CSS Variables mapping for Tailwind
-export const CSS_VARIABLES = {
-  light: {
-    "--color-primary": COLORS.primary.DEFAULT,
-    "--color-primary-hover": COLORS.primary.hover,
-    "--color-bg": COLORS.light.bg,
-    "--color-bg-alt": COLORS.light.bgAlt,
-    "--color-surface": COLORS.light.surface,
-    "--color-sidebar": COLORS.light.sidebar,
-    "--color-border": COLORS.light.border,
-    "--color-text-main": COLORS.light.textMain,
-    "--color-text-muted": COLORS.light.textMuted,
-  },
-  dark: {
-    "--color-primary": COLORS.primary.DEFAULT,
-    "--color-primary-hover": COLORS.primary.hover,
-    "--color-bg": COLORS.dark.bg,
-    "--color-bg-alt": COLORS.dark.bgAlt,
-    "--color-surface": COLORS.dark.surface,
-    "--color-sidebar": COLORS.dark.sidebar,
-    "--color-border": COLORS.dark.border,
-    "--color-text-main": COLORS.dark.textMain,
-    "--color-text-muted": COLORS.dark.textMuted,
-  },
-};

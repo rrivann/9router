@@ -7,9 +7,6 @@ import { PROVIDER_OAUTH } from "open-sse/providers/index.js";
 // CodeBuddy (Tencent) OAuth Configuration (Browser OAuth Polling Flow)
 export const CODEBUDDY_CONFIG = { ...PROVIDER_OAUTH["codebuddy-cn"] };
 
-// OAuth timeout (5 minutes)
-export const OAUTH_TIMEOUT = 300000;
-
 // Provider list
 export const PROVIDERS = {
   CODEBUDDY: "codebuddy-cn",

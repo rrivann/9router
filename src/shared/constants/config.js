@@ -58,9 +58,6 @@ export const CONSOLE_LOG_CONFIG = {
   pollIntervalMs: 1000,
 };
 
-// Client-side store TTL: how long fetched data stays fresh before re-fetching
-export const CLIENT_STORE_TTL_MS = 60000;
-
 // Quota auto-ping: keep 5h windows warm by sending a tiny request right after reset.
 export const QUOTA_AUTOPING_CONFIG = {
   tickIntervalMs: 60000,                // scheduler tick
