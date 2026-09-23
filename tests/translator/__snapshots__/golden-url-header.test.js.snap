@@ -287,6 +287,67 @@ exports[`GOLDEN buildHeaders (default executor providers) > cloudflare-ai → he
 }
 `;
 
+exports[`GOLDEN buildHeaders (default executor providers) > codebuddy → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "User-Agent": "CLI/2.108.1 CodeBuddy/2.108.1",
+    "X-App": "cli",
+    "X-Domain": "www.codebuddy.ai",
+    "X-IDE-Name": "CLI",
+    "X-IDE-Type": "CLI",
+    "X-IDE-Version": "2.108.1",
+    "X-Private-Data": "false",
+    "X-Product": "SaaS",
+    "X-Requested-With": "XMLHttpRequest",
+    "X-Stainless-Helper-Method": "stream",
+    "X-Stainless-Lang": "js",
+    "X-Stainless-Retry-Count": "0",
+    "X-Stainless-Runtime": "node",
+    "x-codebuddy-request": "1",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "User-Agent": "CLI/2.108.1 CodeBuddy/2.108.1",
+    "X-App": "cli",
+    "X-Domain": "www.codebuddy.ai",
+    "X-IDE-Name": "CLI",
+    "X-IDE-Type": "CLI",
+    "X-IDE-Version": "2.108.1",
+    "X-Private-Data": "false",
+    "X-Product": "SaaS",
+    "X-Requested-With": "XMLHttpRequest",
+    "X-Stainless-Helper-Method": "stream",
+    "X-Stainless-Lang": "js",
+    "X-Stainless-Retry-Count": "0",
+    "X-Stainless-Runtime": "node",
+    "x-codebuddy-request": "1",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "User-Agent": "CLI/2.108.1 CodeBuddy/2.108.1",
+    "X-App": "cli",
+    "X-Domain": "www.codebuddy.ai",
+    "X-IDE-Name": "CLI",
+    "X-IDE-Type": "CLI",
+    "X-IDE-Version": "2.108.1",
+    "X-Private-Data": "false",
+    "X-Product": "SaaS",
+    "X-Requested-With": "XMLHttpRequest",
+    "X-Stainless-Helper-Method": "stream",
+    "X-Stainless-Lang": "js",
+    "X-Stainless-Retry-Count": "0",
+    "X-Stainless-Runtime": "node",
+    "x-codebuddy-request": "1",
+  },
+}
+`;
+
 exports[`GOLDEN buildHeaders (default executor providers) > codebuddy-cn → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
@@ -1016,6 +1077,13 @@ exports[`GOLDEN buildUrl (default executor providers) > cloudflare-ai → url (s
 {
   "nonStream": "https://api.cloudflare.com/client/v4/accounts/ACC123/ai/v1/chat/completions",
   "stream": "https://api.cloudflare.com/client/v4/accounts/ACC123/ai/v1/chat/completions",
+}
+`;
+
+exports[`GOLDEN buildUrl (default executor providers) > codebuddy → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://www.codebuddy.ai/v2/chat/completions",
+  "stream": "https://www.codebuddy.ai/v2/chat/completions",
 }
 `;
 
