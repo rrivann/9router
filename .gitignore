@@ -92,3 +92,5 @@ graphify-out/*
 .workbuddy-ai/
 memory/
 build-log.txt
+# Legacy Qwen Cloud keys (rotate before deleting from history)
+qwencloud-keys.txt
