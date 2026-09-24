@@ -8,6 +8,7 @@ import { buildAbortedResponsesTerminalBytes } from "../../utils/responsesStreamH
 import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLine } from "./requestDetail.js";
 import { saveRequestDetail } from "@/lib/usageDb.js";
 import { SSE_HEADERS_CORS as SSE_HEADERS } from "../../utils/sseConstants.js";
+import { emitCodebuddyReport } from "../../services/codebuddyReport.js";
 
 // Responses-API providers emit Responses SSE → which client format to translate INTO, by request sourceFormat.
 const CODEX_SOURCE_TO_TARGET = {
@@ -106,7 +107,7 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
 /**
  * Build onStreamComplete callback for streaming usage tracking.
  */
-export function buildOnStreamComplete({ provider, model, connectionId, apiKey, requestStartTime, body, stream, finalBody, translatedBody, filtersApplied, clientRawRequest, reqTag, log }) {
+export function buildOnStreamComplete({ provider, model, connectionId, apiKey, requestStartTime, body, stream, finalBody, translatedBody, filtersApplied, clientRawRequest, reqTag, log, credentials, providerHeaders, providerUrl, proxyOptions }) {
   const streamDetailId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
   const onStreamComplete = (contentObj, usage, ttftAt) => {
@@ -134,6 +135,22 @@ export function buildOnStreamComplete({ provider, model, connectionId, apiKey, r
     // Persist stream usage to DB (no console line; the "📊 done" line below is authoritative)
     saveUsageStats({ provider, model, tokens: usage, connectionId, apiKey, endpoint: clientRawRequest?.endpoint, label: "STREAM USAGE", silent: true });
     if (log?.line) log.line(reqTag, "📊", formatDoneLine({ usage, latency }));
+
+    // CodeBuddy /v2/report telemetry — mirror real CLI 2.144.0 post-chat
+    // signal so the account is marked "active" (required for daily reward
+    // credits to issue). Gated by CODEBUDDY_EMIT_REPORT=1 (default OFF).
+    if (provider === "codebuddy") {
+      const baseUrl = providerUrl ? new URL(providerUrl).origin : null;
+      emitCodebuddyReport({
+        providerHeaders,
+        credentials,
+        transformedBody: finalBody || translatedBody,
+        baseUrl,
+        proxyOptions,
+        log,
+        reqTag,
+      });
+    }
   };
 
   return { onStreamComplete, streamDetailId };

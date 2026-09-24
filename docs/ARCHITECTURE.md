@@ -539,6 +539,7 @@ Environment variables actively used by code:
 - Sync/cloud URLing: `NEXT_PUBLIC_BASE_URL`, `NEXT_PUBLIC_CLOUD_URL`
 - Outbound proxy: `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY` and lowercase variants
 - Platform/runtime helpers (not app-specific config): `APPDATA`, `NODE_ENV`, `PORT`, `HOSTNAME`
+- CodeBuddy telemetry: `CODEBUDDY_EMIT_REPORT=1` — opt-in flag to fire `POST /v2/report` (plugin_status + chat_request_send + chat_message_send batch) after each CodeBuddy chat, mirroring real CLI 2.144.0 behavior. Required for daily reward credits to issue on the account. Default OFF.
 
 ## Known Architectural Notes
 
