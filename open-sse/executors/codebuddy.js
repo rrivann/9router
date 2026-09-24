@@ -5,6 +5,7 @@ import {
   applyFiltersToMessages,
 } from "../utils/contentFilters.js";
 import { jwtSub } from "../utils/jwtSub.js";
+import { resolveRealmConfig } from "../providers/realmResolver.js";
 
 const ALLOWED_FIELDS = [
   "temperature", "top_p", "presence_penalty", "frequency_penalty", "stop",
@@ -143,6 +144,13 @@ export class CodeBuddyGlobalExecutor extends DefaultExecutor {
     return transformed;
   }
 
+  // Override chat URL to point at the resolved realm (codebuddy.ai or
+  // workbuddy.ai) instead of the static registry baseUrl.
+  buildUrl(model, stream, urlIndex = 0, credentials = null) {
+    const realm = resolveRealmConfig(credentials);
+    return `${realm.baseUrl}/v2/chat/completions`;
+  }
+
   // Header assembly mirrors CLI 2.144.0 cli_exact wire capture (verified via
   // Frida TLSWrap + mitm). Three hex32 pools:
   //   root  → X-Conversation-Request-ID = X-Root-Request-ID = X-Trace-ID =
@@ -152,11 +160,20 @@ export class CodeBuddyGlobalExecutor extends DefaultExecutor {
   // Plus two hex16 for span/parent slots in traceparent/b3/X-B3-SpanId.
   buildHeaders(credentials) {
     const headers = super.buildHeaders(credentials, true);
+    const realm = resolveRealmConfig(credentials);
     const root = hex32();
     const msgId = hex32();
     const conversationId = randomUUID();
     const span = hex16();
     const parent = hex16();
+
+    // Realm-scoped identity — override registry static (codebuddy defaults)
+    // when this connection is bound to WorkBuddy.
+    headers["X-Domain"] = realm.domain;
+    headers["User-Agent"] = realm.userAgent;
+    headers["X-IDE-Name"] = realm.ideName;
+    headers["X-IDE-Type"] = realm.ideType;
+    headers["X-IDE-Version"] = realm.ideVersion;
 
     // Content-Type override — CLI capture sends charset marker.
     headers["Content-Type"] = "application/json; charset=utf-8";
@@ -184,8 +201,7 @@ export class CodeBuddyGlobalExecutor extends DefaultExecutor {
     const uid = jwtSub(token);
     if (uid) headers["X-User-Id"] = uid;
 
-    // Per-connection realm override (Phase 3 hook — resolver lives in registry
-    // static default for now).
+    // Legacy explicit domain override still honored (predates realm setting).
     if (credentials?.providerSpecificData?.domain) {
       headers["X-Domain"] = credentials.providerSpecificData.domain;
     }

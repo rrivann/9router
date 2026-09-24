@@ -20,6 +20,7 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
 
   const isAzure = provider === "azure";
   const isCloudflareAi = provider === "cloudflare-ai";
+  const isCodebuddy = provider === "codebuddy";
   const providerRegions = AI_PROVIDERS?.[provider]?.regions || null;
   const defaultRegion = AI_PROVIDERS?.[provider]?.defaultRegion || providerRegions?.[0]?.id || "";
 
@@ -38,6 +39,7 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
     organization: "",
   });
   const [cloudflareData, setCloudflareData] = useState({ accountId: "" });
+  const [realm, setRealm] = useState("codebuddy");
   const [region, setRegion] = useState(defaultRegion);
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
@@ -64,6 +66,9 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
     }
     if (isCloudflareAi) {
       return { accountId: cloudflareData.accountId };
+    }
+    if (isCodebuddy) {
+      return { realm };
     }
     if (providerRegions && region) {
       return { region };
@@ -277,6 +282,17 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
             value={region}
             onChange={(e) => setRegion(e.target.value)}
             options={providerRegions.map((r) => ({ value: r.id, label: r.label }))}
+          />
+        )}
+        {isCodebuddy && (
+          <Select
+            label="Realm"
+            value={realm}
+            onChange={(e) => setRealm(e.target.value)}
+            options={[
+              { value: "codebuddy", label: "CodeBuddy Global (codebuddy.ai)" },
+              { value: "workbuddy", label: "WorkBuddy (workbuddy.ai)" },
+            ]}
           />
         )}
         {isCompatible && (

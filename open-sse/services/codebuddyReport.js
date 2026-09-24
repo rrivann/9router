@@ -10,28 +10,38 @@
 import { createHash, randomUUID } from "crypto";
 import { jwtSub } from "../utils/jwtSub.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
+import { resolveRealmConfig } from "../providers/realmResolver.js";
 
 const REPORT_TIMEOUT_MS = 10_000;
 
-// Static fingerprint block matched to CLI 2.144.0 wire capture. These fields
-// don't need to be dynamic per-request — they identify the "device" and the
-// CLI release, mirroring what the real client always sends.
-const CLI_2144_STATIC = Object.freeze({
+// Common device fingerprint, realm-agnostic. Matches values on the wire for
+// both CLI 2.144.0 and WorkBuddy 5.5.2 captures.
+const DEVICE_STATIC = Object.freeze({
   timezone: "Asia/Jakarta",
-  releaseDate: 1788530857503,
-  commit: "8d037fece0be1978272cf60f906f7bd144e32408",
   arch: "arm64",
   osVersion: "25.6.0",
   cpuModel: "Apple M2 Pro",
   cpuCores: 10,
   memorySize: 16,
-  extName: "@tencent-ai/codebuddy-code",
-  extVersion: "2.144.0",
-  featureModule: "cli_local",
   vcsType: "unknown",
   vcsRepo: "",
   vcsBranchName: "",
   vcsRevId: "",
+});
+
+// Realm-specific release fingerprint (commit + releaseDate come from each
+// realm's own wire capture).
+const REALM_RELEASE = Object.freeze({
+  codebuddy: {
+    releaseDate: 1788530857503,
+    commit: "8d037fece0be1978272cf60f906f7bd144e32408",
+    featureModule: "cli_local",
+  },
+  workbuddy: {
+    releaseDate: 1788558445056,
+    commit: "910352f030ae2d11d8a21c21929fa4d1b4eeedd7",
+    featureModule: "wb_desktop",
+  },
 });
 
 // Format a hex string into a UUID-shape (8-4-4-4-12) for machineId.
@@ -89,7 +99,7 @@ function reportHeaders(providerHeaders) {
  * @param {object} args.providerHeaders  Headers actually sent to /v2/chat/completions
  * @param {object} args.credentials      Connection credentials (apiKey/accessToken, connectionId)
  * @param {object} args.transformedBody  Body sent to CB (used for prompt length)
- * @param {string} args.baseUrl          Realm base URL (https://www.codebuddy.ai)
+ * @param {string} [args.baseUrl]        Optional realm base URL override; defaults to resolveRealmConfig(credentials).baseUrl
  * @param {object} [args.proxyOptions]   Per-connection proxy config
  * @param {object} [args.log]            Optional { line(tag, icon, ...args) } logger
  * @param {string} [args.reqTag]         Log tag for the parent chat request
@@ -104,7 +114,11 @@ export function emitCodebuddyReport({
   reqTag,
 }) {
   if (process.env.CODEBUDDY_EMIT_REPORT !== "1") return;
-  if (!providerHeaders || !baseUrl) return;
+  if (!providerHeaders) return;
+
+  const realm = resolveRealmConfig(credentials);
+  const targetBase = baseUrl || realm.baseUrl;
+  if (!targetBase) return;
 
   const token = credentials?.apiKey || credentials?.accessToken || "";
   const uid = jwtSub(token);
@@ -116,17 +130,21 @@ export function emitCodebuddyReport({
   const messageId = providerHeaders["X-Conversation-Message-ID"] || randomUUID().replace(/-/g, "");
   const sessionId = randomUUID();
 
+  const release = REALM_RELEASE[realm.id] || REALM_RELEASE.codebuddy;
   const common = {
     userId: uid,
     username: "",
     userNickname: "",
     product: "SaaS",
     sessionId,
-    ideName: "CLI",
-    ideType: "CLI",
-    ideVersion: "2.144.0",
+    ideName: realm.ideName,
+    ideType: realm.ideType,
+    ideVersion: realm.ideVersion,
+    extName: realm.extName,
+    extVersion: realm.extVersion,
     machineId,
-    ...CLI_2144_STATIC,
+    ...DEVICE_STATIC,
+    ...release,
   };
 
   const traceBase = {
@@ -200,7 +218,7 @@ export function emitCodebuddyReport({
     },
   ];
 
-  const url = `${baseUrl.replace(/\/+$/, "")}/v2/report`;
+  const url = `${targetBase.replace(/\/+$/, "")}/v2/report`;
   const headers = reportHeaders(providerHeaders);
   const body = JSON.stringify(events);
 

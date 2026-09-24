@@ -22,6 +22,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
     organization: "",
   });
   const [cloudflareData, setCloudflareData] = useState({ accountId: "" });
+  const [realm, setRealm] = useState("codebuddy");
   const [region, setRegion] = useState("");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
@@ -48,6 +49,10 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
       if (connection.provider === "cloudflare-ai" && connection.providerSpecificData) {
         setCloudflareData({ accountId: connection.providerSpecificData.accountId || "" });
       }
+      if (connection.provider === "codebuddy") {
+        const savedRealm = connection.providerSpecificData?.realm;
+        setRealm(savedRealm === "workbuddy" ? "workbuddy" : "codebuddy");
+      }
       // Load region for providers that support it (e.g. xiaomi-tokenplan)
       const providerCfg = AI_PROVIDERS?.[connection.provider];
       if (providerCfg?.regions) {
@@ -62,6 +67,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
   const isOAuth = connection?.authType === "oauth";
   const isAzure = connection?.provider === "azure";
   const isCloudflareAi = connection?.provider === "cloudflare-ai";
+  const isCodebuddy = connection?.provider === "codebuddy";
   const isCompatible = connection
     ? (isOpenAICompatibleProvider(connection.provider) || isAnthropicCompatibleProvider(connection.provider))
     : false;
@@ -167,6 +173,12 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
       if (isCloudflareAi) {
         updates.providerSpecificData = { accountId: cloudflareData.accountId };
       }
+      if (isCodebuddy) {
+        updates.providerSpecificData = {
+          ...(connection.providerSpecificData || {}),
+          realm,
+        };
+      }
       // Persist updated region for region-aware providers
       if (providerRegions && region) {
         updates.providerSpecificData = buildRegionSpecificData();
@@ -270,6 +282,18 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
             value={region}
             onChange={(e) => setRegion(e.target.value)}
             options={providerRegions.map((r) => ({ value: r.id, label: r.label }))}
+          />
+        )}
+
+        {isCodebuddy && (
+          <Select
+            label="Realm"
+            value={realm}
+            onChange={(e) => setRealm(e.target.value)}
+            options={[
+              { value: "codebuddy", label: "CodeBuddy Global (codebuddy.ai)" },
+              { value: "workbuddy", label: "WorkBuddy (workbuddy.ai)" },
+            ]}
           />
         )}
 

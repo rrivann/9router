@@ -84,7 +84,7 @@ describe("emitCodebuddyReport — gating", () => {
     expect(proxyFetchMock).not.toHaveBeenCalled();
   });
 
-  it("does NOT fetch when baseUrl is missing", () => {
+  it("falls back to realm baseUrl when baseUrl arg is missing", () => {
     process.env.CODEBUDDY_EMIT_REPORT = "1";
     emitCodebuddyReport({
       providerHeaders,
@@ -92,7 +92,9 @@ describe("emitCodebuddyReport — gating", () => {
       transformedBody,
       baseUrl: null,
     });
-    expect(proxyFetchMock).not.toHaveBeenCalled();
+    // Default realm = codebuddy, so target still resolves cleanly.
+    expect(proxyFetchMock).toHaveBeenCalledTimes(1);
+    expect(proxyFetchMock.mock.calls[0][0]).toBe("https://www.codebuddy.ai/v2/report");
   });
 });
 
@@ -236,6 +238,24 @@ describe("emitCodebuddyReport — payload shape", () => {
       baseUrl: "https://www.codebuddy.ai/",
     });
     expect(proxyFetchMock.mock.calls[0][0]).toBe("https://www.codebuddy.ai/v2/report");
+  });
+
+  it("switches URL + fingerprint to workbuddy when realm is workbuddy", () => {
+    emitCodebuddyReport({
+      providerHeaders,
+      credentials: {
+        ...credentials,
+        providerSpecificData: { realm: "workbuddy" },
+      },
+      transformedBody,
+      // no baseUrl override — realm resolver picks it
+    });
+    expect(proxyFetchMock.mock.calls[0][0]).toBe("https://www.workbuddy.ai/v2/report");
+    const body = JSON.parse(proxyFetchMock.mock.calls[0][1].body);
+    expect(body[0].ideName).toBe("WorkBuddy");
+    expect(body[0].ideVersion).toBe("5.5.2");
+    expect(body[0].extName).toBe("workbuddy-desktop");
+    expect(body[0].featureModule).toBe("wb_desktop");
   });
 });
 
