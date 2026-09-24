@@ -10,6 +10,7 @@ import {
 import { cacheClaudeHeaders } from "open-sse/utils/claudeHeaderCache.js";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
 import { getSettings, updateProviderConnection, deleteProviderConnection } from "@/lib/localDb";
+import { classifyCodebuddyError, CB_ERROR } from "open-sse/services/codebuddyErrors.js";
 
 // Handle upstream 403 "Access denied" (IP/anti-abuse — refresh doesn't help).
 // Default action: DELETE the connection permanently after N occurrences.
@@ -310,46 +311,26 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
 
     // Auto-disable on well-known upstream failure modes so the account is
     // skipped in rotation and the user sees a clear reason in the dashboard.
-
-    // 403 "Banned (request illegal)" — CodeBuddy code 11140. Refresh does not help.
-    if (result.status === 403 && typeof result.error === "string" && result.error.includes("11140")) {
+    //
+    // CodeBuddy / WorkBuddy error codes routed through the shared classifier
+    // (open-sse/services/codebuddyErrors.js) — replaces earlier inline
+    // substring checks so both realms and JSON-shape variants match uniformly.
+    const cbKind = classifyCodebuddyError(result.status, result.error);
+    const CB_DISABLE_REASON = {
+      [CB_ERROR.BANNED]: "Banned (request illegal)",
+      [CB_ERROR.CREDITS_EXHAUSTED]: "Credits exhausted",
+      [CB_ERROR.TRIAL_NOT_ACTIVATED]: "Trial version not yet activated",
+    };
+    if (CB_DISABLE_REASON[cbKind]) {
       try {
         await updateProviderConnection(credentials.connectionId, {
           isActive: false,
           testStatus: "error",
-          lastError: "Banned (request illegal)",
+          lastError: CB_DISABLE_REASON[cbKind],
           lastErrorAt: new Date().toISOString(),
         });
-        log.warn("AUTH", `Account ${credentials.connectionName} auto-disabled (banned: request illegal)`);
-      } catch (e) { log.warn("AUTH", `auto-disable (banned) failed: ${e.message}`); }
-    }
-
-    // 429 with CodeBuddy code 14018 — "Credits exhausted". Account has no more quota.
-    if (result.status === 429 && typeof result.error === "string" && result.error.includes("14018")) {
-      try {
-        await updateProviderConnection(credentials.connectionId, {
-          isActive: false,
-          testStatus: "error",
-          lastError: "Credits exhausted",
-          lastErrorAt: new Date().toISOString(),
-        });
-        log.warn("AUTH", `Account ${credentials.connectionName} auto-disabled (credits exhausted)`);
-      } catch (e) { log.warn("AUTH", `auto-disable (credits) failed: ${e.message}`); }
-    }
-
-    // 429 with CodeBuddy code 14017 — "The trial version is not yet activated".
-    // Account trial isn't activated yet; refresh won't help. Disable so it's
-    // skipped in rotation and the dashboard shows the exact reason.
-    if (result.status === 429 && typeof result.error === "string" && result.error.includes("14017")) {
-      try {
-        await updateProviderConnection(credentials.connectionId, {
-          isActive: false,
-          testStatus: "error",
-          lastError: "Trial version not yet activated",
-          lastErrorAt: new Date().toISOString(),
-        });
-        log.warn("AUTH", `Account ${credentials.connectionName} auto-disabled (trial version not yet activated)`);
-      } catch (e) { log.warn("AUTH", `auto-disable (trial-not-activated) failed: ${e.message}`); }
+        log.warn("AUTH", `Account ${credentials.connectionName} auto-disabled (${CB_DISABLE_REASON[cbKind].toLowerCase()})`);
+      } catch (e) { log.warn("AUTH", `auto-disable (${cbKind}) failed: ${e.message}`); }
     }
 
     // 429 with free-tier exhaustion signal — resets on rolling 24h window.
@@ -391,7 +372,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       result.status === 403 &&
       typeof result.error === "string" &&
       /access denied/i.test(result.error) &&
-      !result.error.includes("11140")
+      cbKind !== CB_ERROR.BANNED  // CB banned (11140) handled above; skip here.
     ) {
       accessDeniedTracker.record(credentials.connectionId);
       const streak = accessDeniedTracker.count(credentials.connectionId);
