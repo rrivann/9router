@@ -21,21 +21,31 @@ export default {
     // Prevents the generic *claude* pattern from routing these models through the
     // claude-adaptive path (which would clamp xhigh → high in output_config.effort).
     thinkingFormat: "openai",
+    // Header casing mirror the wire capture verbatim (CLI 2.144.0, cli_exact
+    // Frida TLSWrap capture). Casing is preserved by undici on the wire even
+    // though HTTP itself is case-insensitive — some upstream anomaly detectors
+    // fingerprint on it.
     headers: {
-      "User-Agent": "CLI/2.108.1 CodeBuddy/2.108.1",
+      "User-Agent": "CLI/2.144.0 CodeBuddy/2.144.0",
       "X-Product": "SaaS",
       "X-App": "cli",
-      "X-Stainless-Runtime": "node",
-      "X-Stainless-Lang": "js",
-      "X-Stainless-Helper-Method": "stream",
-      "X-Stainless-Retry-Count": "0",
       "X-IDE-Type": "CLI",
       "X-IDE-Name": "CLI",
-      "X-IDE-Version": "2.108.1",
+      "X-IDE-Version": "2.144.0",
+      "X-Agent-Purpose": "conversation",
+      "X-Agent-Type": "main",
       "X-Private-Data": "false",
-      "X-Requested-With": "XMLHttpRequest",
-      "x-codebuddy-request": "1",
       "X-Domain": "www.codebuddy.ai",
+      "x-requested-with": "XMLHttpRequest",
+      "x-codebuddy-request": "1",
+      "x-stainless-arch": "arm64",
+      "x-stainless-lang": "js",
+      "x-stainless-os": "MacOS",
+      "x-stainless-package-version": "6.25.0",
+      "x-stainless-retry-count": "0",
+      "x-stainless-runtime": "node",
+      "x-stainless-runtime-version": "v24.15.0",
+      "x-stainless-helper-method": "stream",
     },
     auth: { combined: true, header: "Authorization", scheme: "bearer" },
     usage: {
@@ -66,6 +76,7 @@ export default {
     { id: "deep-model", name: "Deep", maxInputTokens: 176000, maxOutputTokens: 24000, creditMultiplier: 3.33, toolCalls: true, strip: ["image", "audio"] },
 
     // ── Claude family ────────────────────────────────────────────────
+    { id: "claude-fable-5.1", name: "Claude Fable 5.1", maxInputTokens: 1000000, maxOutputTokens: 128000, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
     { id: "claude-sonnet-4.6", name: "Claude Sonnet 4.6", maxInputTokens: 176000, maxOutputTokens: 24000, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
     { id: "claude-opus-5", name: "Claude Opus 5", maxInputTokens: 1000000, maxOutputTokens: 128000, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
     { id: "claude-opus-4.7-1m", name: "Claude Opus 4.7 1M", maxInputTokens: 1000000, maxOutputTokens: 128000, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
@@ -127,7 +138,7 @@ export default {
     stateUrl: "https://www.codebuddy.ai/v2/plugin/auth/state",
     tokenUrl: "https://www.codebuddy.ai/v2/plugin/auth/token",
     refreshUrl: "https://www.codebuddy.ai/v2/plugin/auth/token/refresh",
-    userAgent: "CLI/2.108.1 CodeBuddy/2.108.1",
+    userAgent: "CLI/2.144.0 CodeBuddy/2.144.0",
     platform: "CLI",
     pollInterval: 5000,
   },

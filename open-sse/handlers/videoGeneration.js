@@ -11,6 +11,7 @@ import { randomUUID } from "crypto";
 import { getProviderConnections } from "@/lib/db/repos/connectionsRepo.js";
 import { getAccessToken } from "../services/tokenRefresh.js";
 import { createVideoJob, updateVideoJob, getVideoJobByTaskId } from "@/lib/db/repos/videoJobsRepo.js";
+import { jwtSub } from "../utils/jwtSub.js";
 
 const SUBMIT_URL = "https://www.codebuddy.ai/v2/videos/generations";
 const POLL_URL = "https://www.codebuddy.ai/v2/videos/tasks";
@@ -22,18 +23,6 @@ function stripAlias(model) {
   return typeof model === "string" && model.startsWith(MODEL_PREFIX)
     ? model.slice(MODEL_PREFIX.length)
     : model;
-}
-
-function jwtSub(token) {
-  const parts = (token || "").split(".");
-  if (parts.length !== 3) return "";
-  try {
-    const buf = Buffer.from(parts[1].replace(/-/g, "+").replace(/_/g, "/"), "base64");
-    const payload = JSON.parse(buf.toString());
-    return payload?.sub || "";
-  } catch {
-    return "";
-  }
 }
 
 function buildVideoHeaders(bearer, uid) {

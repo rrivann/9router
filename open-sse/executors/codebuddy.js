@@ -1,10 +1,10 @@
 import { randomUUID } from "crypto";
-import { gzipSync } from "zlib";
 import { DefaultExecutor } from "./default.js";
 import {
   createContentFilterCache,
   applyFiltersToMessages,
 } from "../utils/contentFilters.js";
+import { jwtSub } from "../utils/jwtSub.js";
 
 const ALLOWED_FIELDS = [
   "temperature", "top_p", "presence_penalty", "frequency_penalty", "stop",
@@ -28,8 +28,12 @@ const NO_MAX_EFFORT_MODELS = new Set([
 const filters = createContentFilterCache("codebuddy");
 export const invalidateContentFiltersCache = filters.invalidate;
 
-function requestId() {
+function hex32() {
   return randomUUID().replace(/-/g, "");
+}
+
+function hex16() {
+  return randomUUID().replace(/-/g, "").slice(0, 16);
 }
 
 function truncateMiddle(text, maxChars, label) {
@@ -139,30 +143,53 @@ export class CodeBuddyGlobalExecutor extends DefaultExecutor {
     return transformed;
   }
 
+  // Header assembly mirrors CLI 2.144.0 cli_exact wire capture (verified via
+  // Frida TLSWrap + mitm). Three hex32 pools:
+  //   root  → X-Conversation-Request-ID = X-Root-Request-ID = X-Trace-ID =
+  //           X-B3-TraceId = traceparent trace-part = b3 trace-part
+  //   msg   → X-Conversation-Message-ID = X-Request-ID
+  //   conv  → X-Conversation-ID (dashed uuid4 per capture)
+  // Plus two hex16 for span/parent slots in traceparent/b3/X-B3-SpanId.
   buildHeaders(credentials) {
     const headers = super.buildHeaders(credentials, true);
-    const reqId = requestId();
-    const conversationId = requestId();
-    Object.assign(headers, {
-      "Content-Type": "application/json; charset=utf-8",
-      "X-Stainless-Runtime": "node",
-      "X-Stainless-Lang": "js",
-      "X-Stainless-Helper-Method": "stream",
-      "X-Stainless-Retry-Count": "0",
-      "X-Request-ID": reqId,
-      "X-Conversation-ID": conversationId,
-      "X-Conversation-Request-ID": conversationId,
-      "X-Conversation-Message-ID": reqId,
-      "X-Agent-Intent": "craft",
-      "X-Private-Data": "false",
-    });
-    if (credentials.providerSpecificData?.domain) headers["X-Domain"] = credentials.providerSpecificData.domain;
-    return headers;
-  }
+    const root = hex32();
+    const msgId = hex32();
+    const conversationId = randomUUID();
+    const span = hex16();
+    const parent = hex16();
 
-  prepareRequestBody(transformedBody, headers) {
-    headers["Content-Encoding"] = "gzip";
-    return gzipSync(JSON.stringify(transformedBody));
+    // Content-Type override — CLI capture sends charset marker.
+    headers["Content-Type"] = "application/json; charset=utf-8";
+    headers["Accept"] = "application/json";
+    headers["X-Agent-Intent"] = "craft";
+
+    // Conversation identity
+    headers["X-Conversation-ID"] = conversationId;
+    headers["X-Conversation-Request-ID"] = root;
+    headers["X-Conversation-Message-ID"] = msgId;
+    headers["X-Request-ID"] = msgId;
+    headers["X-Root-Request-ID"] = root;
+
+    // Distributed trace family (B3 + W3C traceparent)
+    headers["X-B3-TraceId"] = root;
+    headers["X-B3-SpanId"] = span;
+    headers["X-B3-ParentSpanId"] = parent;
+    headers["X-B3-Sampled"] = "1";
+    headers["X-Trace-ID"] = root;
+    headers["traceparent"] = `00-${root}-${span}-01`;
+    headers["b3"] = `${root}-${span}-1-${parent}`;
+
+    // User identity — derive from JWT sub. API keys (ck_/pt_) return "".
+    const token = credentials?.apiKey || credentials?.accessToken || "";
+    const uid = jwtSub(token);
+    if (uid) headers["X-User-Id"] = uid;
+
+    // Per-connection realm override (Phase 3 hook — resolver lives in registry
+    // static default for now).
+    if (credentials?.providerSpecificData?.domain) {
+      headers["X-Domain"] = credentials.providerSpecificData.domain;
+    }
+    return headers;
   }
 }
 

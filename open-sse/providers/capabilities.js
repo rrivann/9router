@@ -115,6 +115,7 @@ export const PROVIDER_CAPABILITIES = {
     "default-model":       { reasoning: true, thinkingFormat: "openai", contextWindow: 176000, maxOutput: 24000 },
     "default-model-lite":  { reasoning: true, thinkingFormat: "openai", contextWindow: 176000, maxOutput: 24000 },
     "claude-sonnet-4.6":   { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 176000, maxOutput: 24000 },
+    "claude-fable-5.1":    { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 128000 },
     "claude-opus-5":      { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 128000 },
     "claude-opus-4.7-1m":  { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 128000 },
     "claude-opus-4.6":     { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 128000 },
