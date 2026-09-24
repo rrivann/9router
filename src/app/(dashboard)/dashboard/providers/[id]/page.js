@@ -62,6 +62,10 @@ export default function ProviderDetailPage() {
   const [bulkUpdatingProxy, setBulkUpdatingProxy] = useState(false);
   const [providerStrategy, setProviderStrategy] = useState(null);
   const [providerStickyLimit, setProviderStickyLimit] = useState("");
+  // CodeBuddy Global realm override — "auto" (default) preserves per-connection
+  // auto-detect (JWT iss / explicit setting); "codebuddy" / "workbuddy" force
+  // every connection in this provider to that realm at request time.
+  const [codebuddyRealmOverride, setCodebuddyRealmOverride] = useState("auto");
   const [thinkingMode, setThinkingMode] = useState("auto");
   const [contentFilters, setContentFilters] = useState([]);
   const [autoPing, setAutoPing] = useState({ enabled: false, connections: {} });
@@ -302,6 +306,11 @@ export default function ProviderDetailPage() {
       const override = (settingsData.providerStrategies || {})[providerId] || {};
       setProviderStrategy(override.fallbackStrategy || null);
       setProviderStickyLimit(override.stickyRoundRobinLimit != null ? String(override.stickyRoundRobinLimit) : "1");
+      // CB Global realm override (only meaningful when providerId === "codebuddy")
+      const realmSetting = (settingsData.providerRealm || {})[providerId];
+      setCodebuddyRealmOverride(
+        realmSetting === "codebuddy" || realmSetting === "workbuddy" ? realmSetting : "auto"
+      );
       // Load per-provider thinking config
       const thinkingCfg = (settingsData.providerThinking || {})[providerId] || {};
       setThinkingMode(thinkingCfg.mode || "auto");
@@ -380,6 +389,29 @@ export default function ProviderDetailPage() {
       });
     } catch (error) {
       console.log("Error saving provider strategy:", error);
+    }
+  };
+
+  const handleCodebuddyRealmChange = async (value) => {
+    // Optimistic update; server settlement is idempotent.
+    setCodebuddyRealmOverride(value);
+    try {
+      const settingsRes = await fetch("/api/settings", { cache: "no-store" });
+      const settingsData = settingsRes.ok ? await settingsRes.json() : {};
+      const current = settingsData.providerRealm || {};
+      const updated = { ...current };
+      if (value === "codebuddy" || value === "workbuddy") {
+        updated[providerId] = value;
+      } else {
+        delete updated[providerId];
+      }
+      await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerRealm: updated }),
+      });
+    } catch (error) {
+      console.log("Error saving realm override:", error);
     }
   };
 
@@ -1631,6 +1663,22 @@ export default function ProviderDetailPage() {
                     </Button>
                   )}
                 </>
+              )}
+              {/* CodeBuddy Global — realm override (global, all connections) */}
+              {providerId === "codebuddy" && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-text-muted font-medium">Realm</span>
+                  <select
+                    value={codebuddyRealmOverride}
+                    onChange={(e) => handleCodebuddyRealmChange(e.target.value)}
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:border-primary"
+                    title="Route all CodeBuddy Global connections to a specific endpoint. Auto-detect uses per-connection setting + JWT issuer."
+                  >
+                    <option value="auto">Auto-detect</option>
+                    <option value="codebuddy">CodeBuddy (codebuddy.ai)</option>
+                    <option value="workbuddy">WorkBuddy (workbuddy.ai)</option>
+                  </select>
+                </div>
               )}
               {/* Round Robin toggle */}
               <div className="flex flex-wrap items-center gap-2">

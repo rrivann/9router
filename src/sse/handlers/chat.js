@@ -278,6 +278,18 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     // Use shared chatCore
     const chatSettings = await getSettings();
     const providerThinking = (chatSettings.providerThinking || {})[provider] || null;
+
+    // CodeBuddy Global realm override — dashboard setting can pin every
+    // connection to a specific realm (codebuddy / workbuddy). "auto" (or
+    // undefined) preserves per-connection auto-detect. Stashed on credentials
+    // as a transient field so the realm resolver reads it without changing
+    // executor signatures.
+    if (provider === "codebuddy") {
+      const override = chatSettings.providerRealm?.codebuddy;
+      if (override === "codebuddy" || override === "workbuddy") {
+        refreshedCredentials.__realmOverride = override;
+      }
+    }
     const result = await handleChatCore({
       body: { ...body, model: `${provider}/${model}` },
       modelInfo: { provider, model },

@@ -51,11 +51,18 @@ function detectRealmFromToken(token) {
 }
 
 // Resolve realm id from credentials. Precedence:
-//   1. explicit providerSpecificData.realm setting
-//   2. JWT iss claim of accessToken/apiKey
-//   3. legacy providerSpecificData.domain override (workbuddy.ai substring)
-//   4. default "codebuddy"
+//   1. global override — credentials.__realmOverride, set from
+//      settings.providerRealm.codebuddy ("codebuddy" | "workbuddy"; any other
+//      value including "auto" or undefined = no forcing → fall through)
+//   2. explicit providerSpecificData.realm setting on the connection
+//   3. JWT iss claim of accessToken/apiKey
+//   4. legacy providerSpecificData.domain override (workbuddy.ai substring)
+//   5. default "codebuddy"
 export function resolveRealm(credentials) {
+  const globalOverride = credentials?.__realmOverride;
+  if (globalOverride === REALMS.WORKBUDDY || globalOverride === REALMS.CODEBUDDY) {
+    return globalOverride;
+  }
   const explicit = credentials?.providerSpecificData?.realm;
   if (explicit === REALMS.WORKBUDDY || explicit === REALMS.CODEBUDDY) {
     return explicit;

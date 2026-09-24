@@ -17,6 +17,31 @@ function makeJwt(payload) {
 }
 
 describe("resolveRealm — precedence", () => {
+  it("prefers __realmOverride (global setting) over everything else", () => {
+    const creds = {
+      __realmOverride: "workbuddy",
+      providerSpecificData: { realm: "codebuddy" },
+      accessToken: makeJwt({ iss: "www.codebuddy.ai" }),
+    };
+    expect(resolveRealm(creds)).toBe(REALMS.WORKBUDDY);
+  });
+
+  it("__realmOverride='codebuddy' forces codebuddy even for workbuddy JWT", () => {
+    const creds = {
+      __realmOverride: "codebuddy",
+      accessToken: makeJwt({ iss: "www.workbuddy.ai" }),
+    };
+    expect(resolveRealm(creds)).toBe(REALMS.CODEBUDDY);
+  });
+
+  it("ignores unknown __realmOverride values (e.g. 'auto') and falls through", () => {
+    const creds = {
+      __realmOverride: "auto",
+      accessToken: makeJwt({ iss: "www.workbuddy.ai" }),
+    };
+    expect(resolveRealm(creds)).toBe(REALMS.WORKBUDDY);
+  });
+
   it("prefers explicit providerSpecificData.realm", () => {
     const creds = {
       providerSpecificData: { realm: "workbuddy" },
