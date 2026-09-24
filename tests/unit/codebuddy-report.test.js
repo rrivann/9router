@@ -52,7 +52,7 @@ afterEach(() => {
 });
 
 describe("emitCodebuddyReport — gating", () => {
-  it("does NOT fetch when CODEBUDDY_EMIT_REPORT is unset", () => {
+  it("does NOT fetch when env is unset AND enabled is unset", () => {
     emitCodebuddyReport({
       providerHeaders,
       credentials,
@@ -62,34 +62,57 @@ describe("emitCodebuddyReport — gating", () => {
     expect(proxyFetchMock).not.toHaveBeenCalled();
   });
 
-  it("does NOT fetch when CODEBUDDY_EMIT_REPORT is '0'", () => {
+  it("does NOT fetch when CODEBUDDY_EMIT_REPORT='0' and enabled is false", () => {
     process.env.CODEBUDDY_EMIT_REPORT = "0";
     emitCodebuddyReport({
       providerHeaders,
       credentials,
       transformedBody,
+      enabled: false,
       baseUrl: "https://www.codebuddy.ai",
     });
     expect(proxyFetchMock).not.toHaveBeenCalled();
   });
 
-  it("does NOT fetch when providerHeaders is missing", () => {
+  it("DOES fetch when enabled=true (dashboard toggle) even without env", () => {
+    emitCodebuddyReport({
+      providerHeaders,
+      credentials,
+      transformedBody,
+      enabled: true,
+      baseUrl: "https://www.codebuddy.ai",
+    });
+    expect(proxyFetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("DOES fetch when env='1' even without enabled arg (env fallback)", () => {
     process.env.CODEBUDDY_EMIT_REPORT = "1";
+    emitCodebuddyReport({
+      providerHeaders,
+      credentials,
+      transformedBody,
+      baseUrl: "https://www.codebuddy.ai",
+    });
+    expect(proxyFetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT fetch when providerHeaders is missing even if enabled=true", () => {
     emitCodebuddyReport({
       providerHeaders: null,
       credentials,
       transformedBody,
+      enabled: true,
       baseUrl: "https://www.codebuddy.ai",
     });
     expect(proxyFetchMock).not.toHaveBeenCalled();
   });
 
   it("falls back to realm baseUrl when baseUrl arg is missing", () => {
-    process.env.CODEBUDDY_EMIT_REPORT = "1";
     emitCodebuddyReport({
       providerHeaders,
       credentials,
       transformedBody,
+      enabled: true,
       baseUrl: null,
     });
     // Default realm = codebuddy, so target still resolves cleanly.

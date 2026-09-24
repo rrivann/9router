@@ -66,6 +66,9 @@ export default function ProviderDetailPage() {
   // auto-detect (JWT iss / explicit setting); "codebuddy" / "workbuddy" force
   // every connection in this provider to that realm at request time.
   const [codebuddyRealmOverride, setCodebuddyRealmOverride] = useState("auto");
+  // CodeBuddy /v2/report emit — daily reward farming. false (default) skips
+  // the post-chat telemetry; true fires the 3-event batch after every chat.
+  const [codebuddyReportEnabled, setCodebuddyReportEnabled] = useState(false);
   const [thinkingMode, setThinkingMode] = useState("auto");
   const [contentFilters, setContentFilters] = useState([]);
   const [autoPing, setAutoPing] = useState({ enabled: false, connections: {} });
@@ -311,6 +314,8 @@ export default function ProviderDetailPage() {
       setCodebuddyRealmOverride(
         realmSetting === "codebuddy" || realmSetting === "workbuddy" ? realmSetting : "auto"
       );
+      // CB Global /v2/report toggle
+      setCodebuddyReportEnabled((settingsData.providerReport || {})[providerId] === true);
       // Load per-provider thinking config
       const thinkingCfg = (settingsData.providerThinking || {})[providerId] || {};
       setThinkingMode(thinkingCfg.mode || "auto");
@@ -389,6 +394,28 @@ export default function ProviderDetailPage() {
       });
     } catch (error) {
       console.log("Error saving provider strategy:", error);
+    }
+  };
+
+  const handleCodebuddyReportToggle = async (enabled) => {
+    setCodebuddyReportEnabled(enabled);
+    try {
+      const settingsRes = await fetch("/api/settings", { cache: "no-store" });
+      const settingsData = settingsRes.ok ? await settingsRes.json() : {};
+      const current = settingsData.providerReport || {};
+      const updated = { ...current };
+      if (enabled) {
+        updated[providerId] = true;
+      } else {
+        delete updated[providerId];
+      }
+      await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerReport: updated }),
+      });
+    } catch (error) {
+      console.log("Error saving report toggle:", error);
     }
   };
 
@@ -1678,6 +1705,19 @@ export default function ProviderDetailPage() {
                     <option value="codebuddy">CodeBuddy (codebuddy.ai)</option>
                     <option value="workbuddy">WorkBuddy (workbuddy.ai)</option>
                   </select>
+                </div>
+              )}
+              {/* CodeBuddy Global — /v2/report emit toggle (farm daily reward) */}
+              {providerId === "codebuddy" && (
+                <div
+                  className="flex flex-wrap items-center gap-2"
+                  title="After every chat, fire a 3-event report to /v2/report. Real CLI does this — backend uses it to mark the account 'active' and issue daily reward credits."
+                >
+                  <span className="text-xs text-text-muted font-medium">Emit /v2/report</span>
+                  <Toggle
+                    checked={codebuddyReportEnabled}
+                    onChange={handleCodebuddyReportToggle}
+                  />
                 </div>
               )}
               {/* Round Robin toggle */}

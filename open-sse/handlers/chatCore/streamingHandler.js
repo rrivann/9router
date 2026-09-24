@@ -138,13 +138,15 @@ export function buildOnStreamComplete({ provider, model, connectionId, apiKey, r
 
     // CodeBuddy /v2/report telemetry — mirror real CLI 2.144.0 post-chat
     // signal so the account is marked "active" (required for daily reward
-    // credits to issue). Gated by CODEBUDDY_EMIT_REPORT=1 (default OFF).
+    // credits to issue). Gated by the dashboard toggle
+    // (settings.providerReport.codebuddy) or env CODEBUDDY_EMIT_REPORT=1.
     if (provider === "codebuddy") {
       const baseUrl = providerUrl ? new URL(providerUrl).origin : null;
       emitCodebuddyReport({
         providerHeaders,
         credentials,
         transformedBody: finalBody || translatedBody,
+        enabled: credentials?.__reportEnabled === true,
         baseUrl,
         proxyOptions,
         log,

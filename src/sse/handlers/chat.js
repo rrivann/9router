@@ -289,6 +289,11 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       if (override === "codebuddy" || override === "workbuddy") {
         refreshedCredentials.__realmOverride = override;
       }
+      // /v2/report emit toggle — dashboard setting. Env CODEBUDDY_EMIT_REPORT=1
+      // still works as fallback for headless setups (see codebuddyReport.js).
+      if (chatSettings.providerReport?.codebuddy === true) {
+        refreshedCredentials.__reportEnabled = true;
+      }
     }
     const result = await handleChatCore({
       body: { ...body, model: `${provider}/${model}` },

@@ -99,6 +99,9 @@ function reportHeaders(providerHeaders) {
  * @param {object} args.providerHeaders  Headers actually sent to /v2/chat/completions
  * @param {object} args.credentials      Connection credentials (apiKey/accessToken, connectionId)
  * @param {object} args.transformedBody  Body sent to CB (used for prompt length)
+ * @param {boolean} [args.enabled]       Dashboard setting toggle. When true, emit
+ *                                       regardless of env. Env CODEBUDDY_EMIT_REPORT=1
+ *                                       still works as a fallback for headless setups.
  * @param {string} [args.baseUrl]        Optional realm base URL override; defaults to resolveRealmConfig(credentials).baseUrl
  * @param {object} [args.proxyOptions]   Per-connection proxy config
  * @param {object} [args.log]            Optional { line(tag, icon, ...args) } logger
@@ -108,12 +111,14 @@ export function emitCodebuddyReport({
   providerHeaders,
   credentials,
   transformedBody,
+  enabled,
   baseUrl,
   proxyOptions,
   log,
   reqTag,
 }) {
-  if (process.env.CODEBUDDY_EMIT_REPORT !== "1") return;
+  const envOn = process.env.CODEBUDDY_EMIT_REPORT === "1";
+  if (!enabled && !envOn) return;
   if (!providerHeaders) return;
 
   const realm = resolveRealmConfig(credentials);
