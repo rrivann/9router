@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { AsyncLocalStorage } from "async_hooks";
 import { DefaultExecutor } from "./default.js";
 import {
   createContentFilterCache,
@@ -6,6 +7,13 @@ import {
 } from "../utils/contentFilters.js";
 import { jwtSub } from "../utils/jwtSub.js";
 import { resolveRealmConfig } from "../providers/realmResolver.js";
+
+// Per-request state store. Executors are singletons shared across concurrent
+// requests, so any per-request context (loaded content-filter rules, applied
+// filter stats) MUST NOT live as instance fields — one request's reset would
+// clobber another's mid-flight. AsyncLocalStorage scopes state to the async
+// call tree of a single execute() invocation.
+const requestState = new AsyncLocalStorage();
 
 const ALLOWED_FIELDS = [
   "temperature", "top_p", "presence_penalty", "frequency_penalty", "stop",
@@ -103,19 +111,26 @@ export class CodeBuddyGlobalExecutor extends DefaultExecutor {
   }
 
   async execute(params) {
-    this._contentFilters = await filters.load();
-    this._filtersApplied = null; // reset per-request
-    return super.execute(params);
+    const state = { contentFilters: await filters.load(), filtersApplied: null };
+    return requestState.run(state, async () => {
+      const result = await super.execute(params);
+      // Base executor reads this._filtersApplied for the return value. Bridge
+      // per-request state back to the instance field ONLY within this async
+      // scope — safe because AsyncLocalStorage ensures no interleaving.
+      if (state.filtersApplied) result.filtersApplied = state.filtersApplied;
+      return result;
+    });
   }
 
   transformRequest(model, body) {
     const source = super.transformRequest(model, body);
     let messages = normalizeMessages(source.messages);
-    const rules = this._contentFilters || [];
+    const state = requestState.getStore();
+    const rules = state?.contentFilters || [];
     if (rules.length > 0) {
       const result = applyFiltersToMessages(messages, rules);
       messages = result.messages;
-      if (result.applied.length > 0) this._filtersApplied = result.applied;
+      if (result.applied.length > 0 && state) state.filtersApplied = result.applied;
     }
     const transformed = { model, messages, stream: true };
     // Honor the client's reasoning_effort if the translator already set one

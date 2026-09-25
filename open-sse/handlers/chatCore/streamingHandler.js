@@ -56,13 +56,33 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
   // return a clean JSON error instead. The message is stripped of HTML tags
   // and clamped so untrusted upstream text never reaches the client verbatim
   // (the UI may render error.message as HTML).
+  // Streaming path expects SSE. If upstream returns anything else — HTML from
+  // a Cloudflare error page, plain JSON error body, text/plain misconfigure —
+  // piping it through the SSE transform chokes the client. Treat non-SSE as
+  // a blocked pipe and return a clean JSON error.
+  //
+  // Prior logic exempted `application/json` from this guard on the assumption
+  // that JSON might be a streaming NDJSON variant, but the codebase's transforms
+  // all expect `text/event-stream`. A provider returning `application/json` for
+  // a stream=true request is an error body, so treat it the same as HTML.
   const upstreamContentType = (providerResponse.headers.get('content-type') || '').toLowerCase();
-  if (upstreamContentType && !upstreamContentType.includes('text/event-stream') && !upstreamContentType.includes('application/json')) {
+  const isSSE = upstreamContentType.includes('text/event-stream');
+  if (upstreamContentType && !isSSE) {
     const bodyText = await providerResponse.text().catch(() => '');
     const titleMatch = bodyText.match(/<title>([^<]+)<\/title>/i);
-    const sanitizedTitle = (titleMatch?.[1] || '').replace(/<[^>]*>/g, '').replace(/[\r\n]+/g, ' ').trim().slice(0, 160);
-    const shortMsg = sanitizedTitle
-      || (bodyText.length < 200 ? bodyText.replace(/<[^>]*>/g, '').trim().slice(0, 160) : `Upstream returned non-SSE response (${upstreamContentType})`);
+    let shortMsg = (titleMatch?.[1] || '').replace(/<[^>]*>/g, '').replace(/[\r\n]+/g, ' ').trim().slice(0, 160);
+    if (!shortMsg && upstreamContentType.includes('application/json')) {
+      // Try to surface upstream's JSON error message so the caller sees "why".
+      try {
+        const parsed = JSON.parse(bodyText);
+        shortMsg = (parsed?.error?.message || parsed?.message || parsed?.error || '').toString().trim().slice(0, 200);
+      } catch { /* fall through */ }
+    }
+    if (!shortMsg) {
+      shortMsg = bodyText.length < 200
+        ? bodyText.replace(/<[^>]*>/g, '').trim().slice(0, 160)
+        : `Upstream returned non-SSE response (${upstreamContentType})`;
+    }
     const status = providerResponse.status || 502;
     if (log?.errorLine) log.errorLine(reqTag, "✗", `BLOCKED ${status} · ${provider}/${model} · non-SSE (${upstreamContentType})\n    ${shortMsg}`);
     else console.warn(`[STREAM] ${provider} | ${model} | blocked pipe: ${shortMsg} [${status}]`);

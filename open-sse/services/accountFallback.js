@@ -1,4 +1,4 @@
-import { ERROR_RULES, BACKOFF_CONFIG, TRANSIENT_COOLDOWN_MS } from "../config/errorConfig.js";
+import { ERROR_RULES, BACKOFF_CONFIG } from "../config/errorConfig.js";
 
 /**
  * Calculate exponential backoff cooldown for rate limits (429)
@@ -45,8 +45,13 @@ export function checkFallbackError(status, errorText, backoffLevel = 0) {
     }
   }
 
-  // Default: transient cooldown for any unmatched error
-  return { shouldFallback: true, cooldownMs: TRANSIENT_COOLDOWN_MS };
+  // Default: unmatched errors do NOT trigger fallback. Previously we defaulted
+  // to shouldFallback:true so any transient upstream hiccup could cycle
+  // through the whole account pool — a single Cloudflare 520-524 storm would
+  // burn every account in seconds, self-inflicting a DoS on the connection
+  // pool. Surface the error to the caller instead; add an explicit ERROR_RULES
+  // entry for genuinely-transient statuses that deserve retry.
+  return { shouldFallback: false, cooldownMs: 0 };
 }
 
 /**

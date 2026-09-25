@@ -48,7 +48,12 @@ export class DefaultExecutor extends BaseExecutor {
   }
 
   transformRequest(model, body) {
-    const transformed = this.applyJsonSchemaFallback(body);
+    // applyJsonSchemaFallback returns the same `body` ref for the non-matching
+    // path. Clone before any in-place mutation (dropClientMetadata / strip)
+    // so the caller's request body — potentially shared across N fusion-combo
+    // providers running in parallel — is never mutated.
+    let transformed = this.applyJsonSchemaFallback(body);
+    if (transformed === body) transformed = { ...body };
 
     if (transformed && typeof transformed === "object") {
       // quirk: some openai-compatible providers reject Anthropic's client_metadata field

@@ -13,11 +13,17 @@ const refreshLocks = new Map();
 function parseTimeMs(value) {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value === "number") {
+    // Treat 0 (and negatives) as "no expiry known" — legacy DB rows sometimes
+    // persist `0` when the OAuth response omitted expires_at. Falling through
+    // would return 0, and `0 - now < leadMs` is always true → we would then
+    // refresh the token on EVERY request for that connection, hammering the
+    // refresh endpoint.
+    if (value <= 0) return null;
     return value < 1e12 ? value * 1000 : value;
   }
 
   const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function toExpiresAt(expiresIn, nowMs = Date.now()) {

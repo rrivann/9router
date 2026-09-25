@@ -54,7 +54,11 @@ function flattenToolHistory(messages) {
           return { ...rest, content: newContent };
         }
       }
-      return msg;
+      // Untouched message: still clone the top-level shape so downstream
+      // per-provider transforms (content filters, etc.) can't mutate the
+      // caller's original body.messages entry — critical for fusion combo
+      // where the same body is fanned out to N providers in parallel.
+      return { ...msg };
     });
 }
 

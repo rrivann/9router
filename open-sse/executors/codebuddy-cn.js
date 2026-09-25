@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "async_hooks";
 import { DefaultExecutor } from "./default.js";
 import {
   createContentFilterCache,
@@ -7,15 +8,22 @@ import {
 const filters = createContentFilterCache("codebuddy-cn");
 export const invalidateContentFiltersCache = filters.invalidate;
 
+// Per-request state — see codebuddy.js for rationale (singleton executor +
+// concurrent requests would race on instance fields).
+const requestState = new AsyncLocalStorage();
+
 export class CodeBuddyExecutor extends DefaultExecutor {
   constructor() {
     super("codebuddy-cn");
   }
 
   async execute(params) {
-    this._contentFilters = await filters.load();
-    this._filtersApplied = null; // reset per-request
-    return super.execute(params);
+    const state = { contentFilters: await filters.load(), filtersApplied: null };
+    return requestState.run(state, async () => {
+      const result = await super.execute(params);
+      if (state.filtersApplied) result.filtersApplied = state.filtersApplied;
+      return result;
+    });
   }
 
   transformRequest(model, body, stream, credentials) {
@@ -34,11 +42,12 @@ export class CodeBuddyExecutor extends DefaultExecutor {
       transformed.reasoning_summary = "auto";
     }
 
-    const rules = this._contentFilters || [];
+    const state = requestState.getStore();
+    const rules = state?.contentFilters || [];
     if (rules.length > 0 && Array.isArray(transformed.messages)) {
       const result = applyFiltersToMessages(transformed.messages, rules);
       transformed.messages = result.messages;
-      if (result.applied.length > 0) this._filtersApplied = result.applied;
+      if (result.applied.length > 0 && state) state.filtersApplied = result.applied;
     }
 
     return transformed;

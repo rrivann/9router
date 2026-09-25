@@ -114,17 +114,19 @@ export function createErrorResult(statusCode, message, resetsAtMs) {
  * @returns {Response}
  */
 export function unavailableResponse(statusCode, message, retryAfter, retryAfterHuman) {
-  const retryAfterSec = Math.max(Math.ceil((new Date(retryAfter).getTime() - Date.now()) / 1000), 1);
+  const parsedMs = retryAfter ? new Date(retryAfter).getTime() : NaN;
+  const retryAfterSec = Number.isFinite(parsedMs) && parsedMs > 0
+    ? Math.max(Math.ceil((parsedMs - Date.now()) / 1000), 1)
+    : null;
   const msg = `${message} (${retryAfterHuman})`;
+  const headers = { "Content-Type": "application/json" };
+  // Only emit Retry-After when we have a valid parsed timestamp. A NaN value
+  // (from a malformed retryAfter string) previously produced "Retry-After: NaN"
+  // which is non-RFC-compliant and confuses HTTP clients.
+  if (retryAfterSec !== null) headers["Retry-After"] = String(retryAfterSec);
   return new Response(
     JSON.stringify({ error: { message: msg } }),
-    {
-      status: statusCode,
-      headers: {
-        "Content-Type": "application/json",
-        "Retry-After": String(retryAfterSec)
-      }
-    }
+    { status: statusCode, headers }
   );
 }
 
