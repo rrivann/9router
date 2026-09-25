@@ -103,41 +103,11 @@ export async function GET(request) {
 
     const sortedConnections = sortConnections(accountFilteredConnections, sort);
 
-    // Dedupe qwencloud: quota comes from local SQLite aggregated across ALL
-    // accounts (see open-sse/services/usage/qwencloud.js), so every row would
-    // otherwise render an identical card. Collapse to a single entry that
-    // shows the pooled account count + most recent account label.
-    let qwencloudFirst = null;
-    let qwencloudLast = null;
-    let qwencloudCount = 0;
-    const dedupedConnections = [];
-    for (const conn of sortedConnections) {
-      if (conn.provider === "qwencloud") {
-        qwencloudCount++;
-        if (!qwencloudFirst) {
-          qwencloudFirst = conn;
-          dedupedConnections.push(conn);
-        }
-        if (!qwencloudLast || new Date(conn.createdAt || 0) > new Date(qwencloudLast.createdAt || 0)) {
-          qwencloudLast = conn;
-        }
-      } else {
-        dedupedConnections.push(conn);
-      }
-    }
-
-    const total = dedupedConnections.length;
+    const total = sortedConnections.length;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const currentPage = Math.min(page, totalPages);
     const offset = (currentPage - 1) * pageSize;
-    const pageConnections = dedupedConnections.slice(offset, offset + pageSize).map((c) => {
-      const safe = sanitize(c);
-      if (c.provider === "qwencloud" && qwencloudLast) {
-        safe.name = `${qwencloudCount} account${qwencloudCount === 1 ? "" : "s"} • last: ${qwencloudLast.name || "unknown"}`;
-        safe.apiKey = qwencloudLast.apiKey || "";
-      }
-      return safe;
-    });
+    const pageConnections = sortedConnections.slice(offset, offset + pageSize).map(sanitize);
 
     return NextResponse.json({
       connections: pageConnections,

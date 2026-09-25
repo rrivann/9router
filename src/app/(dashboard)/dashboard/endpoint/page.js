@@ -1,7 +1,7 @@
-import { getMachineId } from "@/shared/utils/machine";
+import { getConsistentMachineId } from "@/shared/utils/machineId";
 import EndpointPageClient from "./EndpointPageClient";
 
 export default async function EndpointPage() {
-  const machineId = await getMachineId();
+  const machineId = await getConsistentMachineId();
   return <EndpointPageClient machineId={machineId} />;
 }

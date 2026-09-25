@@ -6,8 +6,6 @@ import {
   refreshCodebuddyToken as _refreshCodebuddyToken,
   getAccessToken as _getAccessToken,
   refreshTokenByProvider as _refreshTokenByProvider,
-  formatProviderCredentials as _formatProviderCredentials,
-  getAllAccessTokens as _getAllAccessTokens,
   getRefreshLeadMs as _getRefreshLeadMs,
 } from "open-sse/services/tokenRefresh.js";
 import {
@@ -27,12 +25,6 @@ export const getAccessToken = (provider, credentials) =>
 
 export const refreshTokenByProvider = (provider, credentials) =>
   _refreshTokenByProvider(provider, credentials, log);
-
-export const formatProviderCredentials = (provider, credentials) =>
-  _formatProviderCredentials(provider, credentials, log);
-
-export const getAllAccessTokens = (userInfo) =>
-  _getAllAccessTokens(userInfo, log);
 
 export const shouldRefreshCredentials = (provider, credentials) =>
   _shouldRefreshCredentials(provider, credentials);
@@ -139,6 +131,3 @@ export async function checkAndRefreshToken(provider, credentials) {
   return creds;
 }
 
-export function releaseConnection(_connectionId) {
-  // No-op: dynamic project-id cache tied to gemini-cli/antigravity has been removed with those providers.
-}

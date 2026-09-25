@@ -22,7 +22,6 @@ import Link from "next/link";
 import { getErrorCode, getRelativeTime } from "@/shared/utils";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useHeaderSearchStore } from "@/store/headerSearchStore";
-import ModelAvailabilityBadge from "./components/ModelAvailabilityBadge";
 import AddCompatibleModal from "./components/AddCompatibleModal";
 
 function getStatusDisplay(connected, error, errorCode) {
@@ -401,7 +400,6 @@ export default function ProvidersPage() {
             OAuth Providers
           </h2>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            <ModelAvailabilityBadge />
             <button
               onClick={() => handleBatchTest("oauth")}
               disabled={!!testingMode}
@@ -475,12 +473,7 @@ export default function ProvidersPage() {
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {freeEntries.map(([key, info]) => {
-            // Kiro accepts both OAuth and api-key connections; count/toggle both
-            // so the card total matches the provider detail page (#kiro-apikey).
-            // Kiro's headless api-key flow persists authType "api_key" (underscore),
-            // while generic apikey providers use "apikey" — include both spellings.
-            const freeAuthTypes =
-              key === "kiro" ? ["oauth", "apikey", "api_key"] : "oauth";
+            const freeAuthTypes = "oauth";
             return (
               <ProviderCard
                 key={key}

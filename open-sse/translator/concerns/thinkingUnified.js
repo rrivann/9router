@@ -15,10 +15,7 @@ const FORMAT_TO_NATIVE = {
   codex: "openai",
   claude: "claude-budget",
   gemini: "gemini-budget",
-  "gemini-cli": "gemini-budget",
   vertex: "gemini-budget",
-  antigravity: "gemini-budget",
-  kiro: "kiro",
 };
 
 // Strip a trailing thinking suffix "model(value)" → "model" (no-op when absent).
@@ -108,7 +105,7 @@ export const captureThinking = extractThinking;
 // when the target wire is OpenAI-compatible (e.g. a claude-adaptive capability
 // on an openai wire would force claude-shaped output_config on a non-Claude
 // endpoint). Falls through to FORMAT_TO_NATIVE instead.
-const NATIVE_ONLY_FORMATS = new Set(["gemini-level", "gemini-budget", "claude-budget", "claude-adaptive", "kiro"]);
+const NATIVE_ONLY_FORMATS = new Set(["gemini-level", "gemini-budget", "claude-budget", "claude-adaptive"]);
 
 // Resolve thinking format: provider override > capability > derive(targetFormat).
 function resolveFormat(targetFormat, model, provider) {
@@ -233,14 +230,11 @@ function normalizeOpenAILevel(level, supportedLevels) {
 
 // Providers whose OpenAI-compatible gateway accepts "max" as a valid
 // reasoning_effort value. Everyone else caps at "xhigh".
-const OPENAI_MAX_EFFORT_PROVIDERS = new Set(["codebuddy", "codebuddy-cn", "qwencloud"]);
+const OPENAI_MAX_EFFORT_PROVIDERS = new Set(["codebuddy", "codebuddy-cn"]);
 
 // Per-model exceptions: providers in OPENAI_MAX_EFFORT_PROVIDERS whose specific
 // models still cap at "xhigh" (upstream rejects "max" for that model).
-// Live-verified against DashScope-intl 2026-07-18 for qwencloud/qwen3.7-max.
-const OPENAI_MAX_MODEL_EXCEPTIONS = new Set([
-  "qwencloud:qwen3.7-max",
-]);
+const OPENAI_MAX_MODEL_EXCEPTIONS = new Set();
 
 // Per-user override: specific provider+model pairs where a
 // client-provided reasoning_effort:"medium" is silently upgraded to "max".
@@ -354,9 +348,6 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, provider = null, mod
       if (level) body.reasoning_effort = level === "xhigh" || level === "max" ? "high" : level;
       break;
     }
-    case "kiro":
-      // Kiro thinking handled via system-tag injection in openai-to-kiro.js; no body field here.
-      break;
     default:
       break;
   }

@@ -7,7 +7,7 @@
  *   import {
  *     createContentFilterCache, applyFiltersToMessages,
  *   } from "../utils/contentFilters.js";
- *   const filters = createContentFilterCache("qwencloud");
+ *   const filters = createContentFilterCache("codebuddy");
  *
  *   async execute(params) {
  *     this._contentFilters = await filters.load();

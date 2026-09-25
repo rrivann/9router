@@ -3,7 +3,6 @@
  */
 
 import { PROVIDERS } from "../../providers/index.js";
-import { proxyAwareFetch } from "../../utils/proxyFetch.js";
 
 // usage endpoints: single source from registry transport.usage
 export const U = (id) => PROVIDERS[id]?.usage || {};
@@ -39,32 +38,5 @@ export function parseResetTime(resetValue) {
   } catch (error) {
     console.warn(`Failed to parse reset time: ${resetValue}`, error);
     return null;
-  }
-}
-
-export function toFiniteNumber(value, fallback = 0) {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return fallback;
-}
-
-export function normalizeCloudCodeProjectId(project) {
-  if (typeof project === "string") return project.trim() || null;
-  if (project && typeof project === "object" && typeof project.id === "string") {
-    return project.id.trim() || null;
-  }
-  return null;
-}
-
-export async function fetchWithTimeout(url, opts, ms = 10000, proxyOptions = null) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), ms);
-  try {
-    return await proxyAwareFetch(url, { ...opts, signal: controller.signal }, proxyOptions);
-  } finally {
-    clearTimeout(timeoutId);
   }
 }

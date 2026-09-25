@@ -49,35 +49,6 @@ export async function refreshTokenByProvider(provider, credentials, log) {
   return handler ? handler(credentials, log) : null;
 }
 
-export function formatProviderCredentials(provider, credentials, log) {
-  if (provider !== "codebuddy-cn" && provider !== "codebuddy") {
-    log?.warn?.("TOKEN_REFRESH", `No configuration found for provider: ${provider}`);
-    return null;
-  }
-  return {
-    apiKey: credentials.apiKey,
-    accessToken: credentials.accessToken,
-    refreshToken: credentials.refreshToken,
-  };
-}
-
-export async function getAllAccessTokens(userInfo, log) {
-  const results = {};
-  if (userInfo.connections && Array.isArray(userInfo.connections)) {
-    for (const connection of userInfo.connections) {
-      if (connection.isActive && connection.provider) {
-        const token = await getAccessToken(connection.provider, {
-          refreshToken: connection.refreshToken
-        }, log);
-        if (token) {
-          results[connection.provider] = token;
-        }
-      }
-    }
-  }
-  return results;
-}
-
 export async function refreshWithRetry(refreshFn, maxRetries = 3, log = null) {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     if (attempt > 0) {

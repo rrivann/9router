@@ -73,10 +73,8 @@ export default function ProviderDetailPage() {
   const [contentFilters, setContentFilters] = useState([]);
   const [autoPing, setAutoPing] = useState({ enabled: false, connections: {} });
   const [suggestedModels, setSuggestedModels] = useState([]);
-  const [kiloFreeModels, setKiloFreeModels] = useState([]);
   const [disabledModelIds, setDisabledModelIds] = useState([]);
   const [confirmState, setConfirmState] = useState(null);
-  const [showAgRiskModal, setShowAgRiskModal] = useState(false);
   const [oneByOneRunning, setOneByOneRunning] = useState(false);
   const [oneByOneStopping, setOneByOneStopping] = useState(false);
   const [oneByOneCurrentConnectionId, setOneByOneCurrentConnectionId] = useState(null);
@@ -85,20 +83,11 @@ export default function ProviderDetailPage() {
   const stopOneByOneRef = useRef(false);
   const { copied, copy } = useCopyToClipboard();
 
-  const AG_RISK_STORAGE_KEY = "ag_risk_confirmed";
-
   const openOAuthConnection = () => {
     setShowOAuthModal(true);
   };
 
   const triggerOAuthConnection = () => {
-    if (providerId === "antigravity" && typeof window !== "undefined") {
-      const confirmed = window.localStorage.getItem(AG_RISK_STORAGE_KEY) === "true";
-      if (!confirmed) {
-        setShowAgRiskModal(true);
-        return;
-      }
-    }
     if (isOAuth) {
       openOAuthConnection();
       return;
@@ -115,18 +104,6 @@ export default function ProviderDetailPage() {
   const triggerAddConnection = () => {
     if (isOAuth) {
       triggerOAuthConnection();
-      return;
-    }
-    triggerApiKeyConnection();
-  };
-
-  const handleAgRiskConfirm = () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(AG_RISK_STORAGE_KEY, "true");
-    }
-    setShowAgRiskModal(false);
-    if (isOAuth) {
-      openOAuthConnection();
       return;
     }
     triggerApiKeyConnection();
@@ -178,7 +155,6 @@ export default function ProviderDetailPage() {
       if (lv) lv.forEach((l) => { if (l !== "none") set.add(l); });
     };
     for (const m of models) addLevels(m.id);
-    for (const m of kiloFreeModels) addLevels(m.id);
     for (const entry of customModels) {
       if (entry.providerAlias !== providerStorageAlias) continue;
       if ((entry.kind || entry.type || "llm") !== "llm") continue;
@@ -276,15 +252,6 @@ export default function ProviderDetailPage() {
       console.log("Error fetching custom models:", error);
     }
   }, []);
-
-  // Fetch free models from Kilo API for kilocode provider
-  useEffect(() => {
-    if (providerId !== "kilocode") return;
-    fetch("/api/providers/kilo/free-models")
-      .then((res) => res.json())
-      .then((data) => { if (data.models?.length) setKiloFreeModels(data.models); })
-      .catch(() => {});
-  }, [providerId]);
 
   const fetchConnections = useCallback(async () => {
     try {
@@ -1273,10 +1240,7 @@ export default function ProviderDetailPage() {
     }
     // Combine hardcoded models with Kilo free models (deduplicated)
     // Exclude non-llm models (embedding, tts, etc.) — they have dedicated pages under media-providers
-    const allModels = [
-      ...models,
-      ...kiloFreeModels.filter((fm) => !models.some((m) => m.id === fm.id)),
-    ].filter((m) => { const k = getModelKind(m); return !k || k === "llm"; });
+    const allModels = models.filter((m) => { const k = getModelKind(m); return !k || k === "llm"; });
     const disabledSet = new Set(disabledModelIds);
     const displayModels = allModels.filter((m) => !disabledSet.has(m.id));
     const disabledDisplayModels = allModels.filter((m) => disabledSet.has(m.id));
@@ -1911,10 +1875,7 @@ export default function ProviderDetailPage() {
             )}
           </div>
           {!isCompatible && (() => {
-            const allIds = [
-              ...models,
-              ...kiloFreeModels.filter((fm) => !models.some((m) => m.id === fm.id)),
-            ].filter((m) => { const k = getModelKind(m); return !k || k === "llm"; }).map((m) => m.id);
+            const allIds = models.filter((m) => { const k = getModelKind(m); return !k || k === "llm"; }).map((m) => m.id);
             const activeIds = allIds.filter((id) => !disabledModelIds.includes(id));
             return (
               <div className="flex gap-2">
@@ -2156,18 +2117,6 @@ export default function ProviderDetailPage() {
           onSuccess={fetchConnections}
         />
       )}
-
-      {/* AG Risk Confirmation Modal */}
-      <ConfirmModal
-        isOpen={showAgRiskModal}
-        onClose={() => setShowAgRiskModal(false)}
-        onConfirm={handleAgRiskConfirm}
-        title="Risk Notice"
-        message={providerInfo?.deprecationNotice}
-        confirmText="I Understand, Continue"
-        cancelText="Cancel"
-        variant="danger"
-      />
 
       {/* Confirm Modal */}
       <ConfirmModal
