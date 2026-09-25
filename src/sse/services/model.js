@@ -42,22 +42,18 @@ export async function getModelInfo(modelStr) {
     // Provider-node prefixes are user-defined. They must not override built-in
     // provider ids/aliases such as `cf`, `cloudflare-ai`, `openai`, or `hf`.
     if (!RESERVED_PROVIDER_PREFIXES.has(parsed.providerAlias)) {
-      const openaiNodes = await getProviderNodes({ type: "openai-compatible" });
-      const matchedOpenAI = openaiNodes.find((node) => node.prefix === parsed.providerAlias);
-      if (matchedOpenAI) {
-        return { provider: matchedOpenAI.id, model: parsed.model };
-      }
-
-      const anthropicNodes = await getProviderNodes({ type: "anthropic-compatible" });
-      const matchedAnthropic = anthropicNodes.find((node) => node.prefix === parsed.providerAlias);
-      if (matchedAnthropic) {
-        return { provider: matchedAnthropic.id, model: parsed.model };
-      }
-
-      const embeddingNodes = await getProviderNodes({ type: "custom-embedding" });
-      const matchedEmbedding = embeddingNodes.find((node) => node.prefix === parsed.providerAlias);
-      if (matchedEmbedding) {
-        return { provider: matchedEmbedding.id, model: parsed.model };
+      // Batch: one SQL fetch + JS filter across 3 known node types. Previously
+      // this was 3 sequential SELECT ... WHERE type=? calls (with row-level
+      // JSON parse per call), even for the common case where the prefix isn't
+      // any user-node at all.
+      const allNodes = await getProviderNodes();
+      const matched = allNodes.find(
+        (n) =>
+          n.prefix === parsed.providerAlias &&
+          (n.type === "openai-compatible" || n.type === "anthropic-compatible" || n.type === "custom-embedding")
+      );
+      if (matched) {
+        return { provider: matched.id, model: parsed.model };
       }
     }
     return {

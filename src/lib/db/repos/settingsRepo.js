@@ -60,9 +60,28 @@ function mergeWithDefaults(raw) {
   return merged;
 }
 
+// Short-TTL cache for the merged settings object. Every chat request hits
+// getSettings() 3× (chat.js dispatcher, auth.js getProviderCredentials, and
+// again for providerThinking/rtkEnabled/etc). Each call was a SQLite read +
+// JSON parse + defaults iteration; caching for 5s absorbs ~99% of that.
+// Cache is invalidated on updateSettings() and exported for external
+// invalidation (e.g. content-filter cache wiring).
+const SETTINGS_CACHE_TTL_MS = 5_000;
+let _settingsCache = { value: null, expiresAt: 0 };
+
+export function invalidateSettingsCache() {
+  _settingsCache = { value: null, expiresAt: 0 };
+}
+
 export async function getSettings() {
+  const now = Date.now();
+  if (_settingsCache.value && _settingsCache.expiresAt > now) {
+    return _settingsCache.value;
+  }
   const raw = await readRaw();
-  return mergeWithDefaults(raw);
+  const merged = mergeWithDefaults(raw);
+  _settingsCache = { value: merged, expiresAt: now + SETTINGS_CACHE_TTL_MS };
+  return merged;
 }
 
 // Nested maps that UI often PATCHes as a whole object after GET — deep-merge
@@ -119,6 +138,7 @@ export async function updateSettings(updates) {
       [stringifyJson(next)]
     );
   });
+  invalidateSettingsCache();
   return mergeWithDefaults(next);
 }
 

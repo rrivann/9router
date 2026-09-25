@@ -14,22 +14,42 @@ function rowToCombo(row) {
   };
 }
 
-export async function getCombos() {
+// 5s TTL cache. Chat dispatchers call getComboByName twice per aliased-model
+// request (once in handleChat, once in getModelInfo fallback). Combos list is
+// tiny (usually <10 rows) and mutated rarely (via UI), so cache both the full
+// list and a lookup Map for O(1) name resolution.
+const COMBOS_CACHE_TTL_MS = 5_000;
+let _combosCache = { list: null, byName: null, expiresAt: 0 };
+
+export function invalidateCombosCache() {
+  _combosCache = { list: null, byName: null, expiresAt: 0 };
+}
+
+async function loadCombosCache() {
+  const now = Date.now();
+  if (_combosCache.list && _combosCache.expiresAt > now) return _combosCache;
   const db = await getAdapter();
   const rows = db.all(`SELECT * FROM combos ORDER BY createdAt ASC`);
-  return rows.map(rowToCombo);
+  const list = rows.map(rowToCombo);
+  const byName = new Map();
+  for (const c of list) if (c?.name) byName.set(c.name, c);
+  _combosCache = { list, byName, expiresAt: now + COMBOS_CACHE_TTL_MS };
+  return _combosCache;
+}
+
+export async function getCombos() {
+  const { list } = await loadCombosCache();
+  return list;
 }
 
 export async function getComboById(id) {
-  const db = await getAdapter();
-  const row = db.get(`SELECT * FROM combos WHERE id = ?`, [id]);
-  return rowToCombo(row);
+  const { list } = await loadCombosCache();
+  return list.find((c) => c.id === id) || null;
 }
 
 export async function getComboByName(name) {
-  const db = await getAdapter();
-  const row = db.get(`SELECT * FROM combos WHERE name = ?`, [name]);
-  return rowToCombo(row);
+  const { byName } = await loadCombosCache();
+  return byName.get(name) || null;
 }
 
 export async function createCombo(data) {
@@ -47,6 +67,7 @@ export async function createCombo(data) {
     `INSERT INTO combos(id, name, kind, models, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?, ?)`,
     [combo.id, combo.name, combo.kind, stringifyJson(combo.models), combo.createdAt, combo.updatedAt]
   );
+  invalidateCombosCache();
   return combo;
 }
 
@@ -63,11 +84,13 @@ export async function updateCombo(id, data) {
     );
     result = merged;
   });
+  invalidateCombosCache();
   return result;
 }
 
 export async function deleteCombo(id) {
   const db = await getAdapter();
   const res = db.run(`DELETE FROM combos WHERE id = ?`, [id]);
+  invalidateCombosCache();
   return (res?.changes ?? 0) > 0;
 }
