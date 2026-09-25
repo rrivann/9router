@@ -612,16 +612,14 @@ function startServer(updatePromise) {
         const { killTray } = require("./src/cli/tray/tray");
         killTray();
       } catch (e) { }
-      // Kill MIT server (privileged process) via PID file
-      killProxyByPidFile();
       // Kill cloudflared/tailscale via PID file (only this app's tunnel)
-      killTunnelByPidFile();
+      try { killTunnelByPidFile(); } catch (e) { }
       // Kill server process directly
       if (server.pid) {
-        process.kill(server.pid, "SIGKILL");
+        try { process.kill(server.pid, "SIGKILL"); } catch (e) { }
+        // Also try to kill process group
+        try { process.kill(-server.pid, "SIGKILL"); } catch (e) { }
       }
-      // Also try to kill process group
-      process.kill(-server.pid, "SIGKILL");
     } catch (e) { }
   }
 

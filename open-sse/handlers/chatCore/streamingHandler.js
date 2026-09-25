@@ -84,19 +84,14 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
   const stallTimeoutMs = PROVIDERS[provider]?.stallTimeoutMs || STREAM_STALL_TIMEOUT_MS;
   const transformedBody = pipeWithDisconnect(providerResponse, transformStream, streamController, onAbortTerminal, stallTimeoutMs);
 
-  saveRequestDetail(buildRequestDetail({
-    provider, model, connectionId,
-    latency: { ttft: 0, total: Date.now() - requestStartTime },
-    tokens: { prompt_tokens: 0, completion_tokens: 0 },
-    request: extractRequestConfig(body, stream),
-    providerRequest: finalBody || translatedBody || null,
-    providerResponse: "[Streaming - raw response not captured]",
-    response: { content: "[Streaming in progress...]", thinking: null, type: "streaming" },
-    status: "success",
-    filtersApplied
-  }, { id: streamDetailId })).catch(err => {
-    console.error("[RequestDetail] Failed to save streaming request:", err.message);
-  });
+  // Previously wrote a "[Streaming in progress...]" placeholder row here to
+  // give the dashboard early visibility, then overwrote it in onStreamComplete
+  // when the stream finished. The two writes are fire-and-forget against
+  // SQLite, so under sql.js (100ms debounce) or under load the placeholder's
+  // INSERT sometimes landed AFTER the final UPDATE, leaving users staring at
+  // "[Streaming in progress...]" as the persisted response. The completion
+  // path already writes the real row; a missing in-flight row is preferable
+  // to a race-corrupted one.
 
   return {
     success: true,

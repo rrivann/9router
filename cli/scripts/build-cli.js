@@ -83,6 +83,11 @@ function copyRecursive(src, dest) {
 
 console.log("📦 Building 9Router CLI package with Next.js...\n");
 
+// Wipe any prior .build-home so a stale JWT secret / SQLite from an earlier
+// run doesn't seed this build. The dir is rebuilt fresh below.
+if (fs.existsSync(buildHomeDir)) {
+  fs.rmSync(buildHomeDir, { recursive: true, force: true });
+}
 fs.mkdirSync(buildHomeDir, { recursive: true });
 fs.mkdirSync(path.join(buildHomeDir, "AppData", "Roaming"), { recursive: true });
 fs.mkdirSync(path.join(buildHomeDir, "AppData", "Local"), { recursive: true });
@@ -158,6 +163,20 @@ copyRecursive(standaloneApp, cliAppDir);
 const standaloneNodeModules = path.join(standaloneRootToUse, "node_modules");
 if (standaloneApp !== standaloneRootToUse && fs.existsSync(standaloneNodeModules)) {
   copyRecursive(standaloneNodeModules, path.join(cliAppDir, "node_modules"));
+}
+
+// STRIP `.build-home` residue from the standalone copy. Next.js workspace-mode
+// tracing mirrors the workspace tree, so anything under `cli/.build-home` (a
+// fake $HOME we pointed the build at) ends up copied into `cli/app/cli/…`.
+// That path contains:
+//   - .9router/jwt-secret        (32-byte HMAC session key — MUST NOT ship)
+//   - .9router/db/data.sqlite    (populated schema, needless payload)
+//   - Library/Preferences/nextjs-nodejs/config.json (build-host fingerprint)
+// Publishing any of those to npm leaks credentials + build-host identity.
+const leakedNested = path.join(cliAppDir, path.basename(cliDir));
+if (fs.existsSync(leakedNested)) {
+  fs.rmSync(leakedNested, { recursive: true, force: true });
+  console.log(`✅ Stripped .build-home residue from bundle (${path.basename(cliDir)}/)`);
 }
 console.log("✅ Copied standalone build\n");
 
