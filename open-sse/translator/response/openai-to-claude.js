@@ -105,6 +105,14 @@ export function openaiToClaudeResponse(chunk, state) {
       state.usage.cache_creation_input_tokens = cacheCreateTokens;
     }
 
+    // Pass through provider-reported credit (CodeBuddy). Not part of Claude's
+    // usage shape but downstream (formatDoneLine, DB, UI) reads it — dropping
+    // it here means FMT=claude-openai loses credit while FMT=openai-openai
+    // keeps it.
+    if (typeof chunk.usage.credit === "number") {
+      state.usage.credit = chunk.usage.credit;
+    }
+
     // Note: completion_tokens_details.reasoning_tokens is already included in output_tokens
     // No need to add separately as Claude expects total output_tokens
   }
