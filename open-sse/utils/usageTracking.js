@@ -87,6 +87,7 @@ export function filterUsageForFormat(usage, targetFormat) {
       'prompt_tokens', 'completion_tokens', 'total_tokens',
       'cached_tokens', 'reasoning_tokens',
       'prompt_tokens_details', 'completion_tokens_details',
+      'credit',
       'estimated'
     ]
   };
@@ -115,6 +116,10 @@ function normalizeUsage(usage) {
   assignNumber("cache_creation_input_tokens", usage?.cache_creation_input_tokens);
   assignNumber("cached_tokens", usage?.cached_tokens);
   assignNumber("reasoning_tokens", usage?.reasoning_tokens);
+  // Provider-reported credit cost (CodeBuddy/Tencent emits usage.credit in the
+  // final SSE chunk — direct pass-through of what actually got debited from
+  // the account, not our estimate).
+  assignNumber("credit", usage?.credit);
 
   // Preserve nested details objects for 0penAI format forwarding
   if (usage?.prompt_tokens_details && typeof usage.prompt_tokens_details === "object") {
@@ -190,6 +195,10 @@ export function canonicalizeUsage(usage) {
     cache_creation_input_tokens: cacheCreation,
   };
   if (reasoning > 0) result.reasoning_tokens = reasoning;
+  // Pass through provider-reported credit (CodeBuddy) verbatim — this is the
+  // actual debited cost, not derived from tokens.
+  const credit = num(usage.credit);
+  if (credit > 0) result.credit = credit;
   return result;
 }
 
@@ -259,7 +268,8 @@ export function extractUsage(chunk) {
     });
   }
 
-  // OpenAI format (also covers DeepSeek which uses prompt_cache_hit_tokens)
+  // OpenAI format (also covers DeepSeek which uses prompt_cache_hit_tokens,
+  // and CodeBuddy which adds a `credit` field for the actual debited cost)
   if (chunk.usage && typeof chunk.usage === "object" && chunk.usage.prompt_tokens !== undefined) {
     return normalizeUsage({
       prompt_tokens: chunk.usage.prompt_tokens,
@@ -267,7 +277,8 @@ export function extractUsage(chunk) {
       cached_tokens: chunk.usage.prompt_tokens_details?.cached_tokens || chunk.usage.prompt_cache_hit_tokens,
       reasoning_tokens: chunk.usage.completion_tokens_details?.reasoning_tokens,
       prompt_tokens_details: chunk.usage.prompt_tokens_details,
-      completion_tokens_details: chunk.usage.completion_tokens_details
+      completion_tokens_details: chunk.usage.completion_tokens_details,
+      credit: chunk.usage.credit,
     });
   }
 

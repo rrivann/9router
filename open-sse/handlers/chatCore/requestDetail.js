@@ -77,29 +77,33 @@ export function buildRequestDetail(base, overrides = {}) {
   };
 }
 
-// Build the "done" summary: duration, ttft, in/out tokens with cache breakdown
+// Build the "done" summary: duration, ttft, in/out tokens with cache breakdown.
+// Canonicalize first so prompt is cache-inclusive — matches the dashboard
+// Details tab math (cached/prompt) and avoids the Claude-shape trap where
+// input_tokens is cache-exclusive and yields nonsense percentages like 33635%.
 export function formatDoneLine({ usage, latency }) {
-  const u = usage || {};
-  const inTok = u.prompt_tokens ?? u.input_tokens ?? 0;
-  const outTok = u.completion_tokens ?? u.output_tokens ?? 0;
-  const cacheRead = u.cache_read_input_tokens ?? u.cached_tokens ?? u.prompt_tokens_details?.cached_tokens ?? 0;
+  const u = canonicalizeUsage(usage) || {};
+  const inTok = u.prompt_tokens ?? 0;
+  const outTok = u.completion_tokens ?? 0;
+  const cacheRead = u.cached_tokens ?? 0;
   const cacheCreate = u.cache_creation_input_tokens ?? 0;
+  const credit = u.credit ?? 0;
   let inStr = `IN ${inTok}`;
   if (cacheRead || cacheCreate) {
     const parts = [];
     if (cacheRead) parts.push(`↻${cacheRead}`);
     if (cacheCreate) parts.push(`+${cacheCreate}`);
-    // Hit ratio: cache-read as % of prompt (excludes cache_creation which is
-    // billed at write rate). Only shown when there's a meaningful prompt to
-    // compare against, so single-token pings don't display "100%".
     if (cacheRead > 0 && inTok > 0) {
-      const pct = Math.round((cacheRead / inTok) * 100);
-      parts.push(`= ${pct}%`);
+      const raw = (cacheRead / inTok) * 100;
+      const label = raw >= 99.95 ? "100%" : `${raw.toFixed(1)}%`;
+      parts.push(`= ${label}`);
     }
     inStr += ` (CACHE ${parts.join(" ")})`;
   }
   const ttftStr = latency?.ttft ? ` · TTFT ${latency.ttft}ms` : "";
-  return `DONE ${latency?.total ?? 0}ms${ttftStr} · ${inStr} · OUT ${outTok}`;
+  // Provider-reported credit (CodeBuddy) — actual debited cost, not estimate.
+  const creditStr = credit > 0 ? ` · CREDIT ${credit.toFixed(2)}` : "";
+  return `DONE ${latency?.total ?? 0}ms${ttftStr} · ${inStr} · OUT ${outTok}${creditStr}`;
 }
 
 export function saveUsageStats({ provider, model, tokens, connectionId, apiKey, endpoint, label = "USAGE", silent = false }) {

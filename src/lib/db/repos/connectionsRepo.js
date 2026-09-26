@@ -2,6 +2,30 @@ import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 
+// Full-list TTL cache. getProviderConnections is called on every chat request
+// (auth flow filters this list) plus every usage-stats fetch — the SELECT is
+// cheap but rowToConn's JSON.parse per row adds up at scale. Any mutation
+// invalidates so callers observe writes immediately.
+const CACHE_TTL_MS = 30_000;
+let cachedList = null;
+let cachedAt = 0;
+
+function invalidateConnectionsCache() {
+  cachedList = null;
+  cachedAt = 0;
+}
+
+async function getAllConnectionsCached() {
+  if (cachedList && (Date.now() - cachedAt) < CACHE_TTL_MS) return cachedList;
+  const db = await getAdapter();
+  const rows = db.all(`SELECT * FROM providerConnections`);
+  cachedList = rows.map(rowToConn);
+  cachedAt = Date.now();
+  return cachedList;
+}
+
+export { invalidateConnectionsCache };
+
 const OPTIONAL_FIELDS = [
   "displayName", "email", "globalPriority", "defaultModel",
   "accessToken", "refreshToken", "expiresAt", "tokenType",
@@ -68,16 +92,18 @@ function deriveConnectionName(data, fallbackName) {
 }
 
 export async function getProviderConnections(filter = {}) {
-  const db = await getAdapter();
-  const where = [];
-  const params = [];
-  if (filter.provider) { where.push("provider = ?"); params.push(filter.provider); }
-  if (filter.isActive !== undefined) { where.push("isActive = ?"); params.push(filter.isActive ? 1 : 0); }
-  const sql = `SELECT * FROM providerConnections${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`;
-  const rows = db.all(sql, params);
-  const list = rows.map(rowToConn);
-  list.sort((a, b) => (a.priority || 999) - (b.priority || 999));
-  return list;
+  const all = await getAllConnectionsCached();
+  let list = all;
+  if (filter.provider !== undefined) {
+    list = list.filter((c) => c.provider === filter.provider);
+  }
+  if (filter.isActive !== undefined) {
+    const want = !!filter.isActive;
+    list = list.filter((c) => (c.isActive ?? true) === want);
+  }
+  const copy = [...list];
+  copy.sort((a, b) => (a.priority || 999) - (b.priority || 999));
+  return copy;
 }
 
 export async function getProviderConnectionById(id) {
@@ -234,6 +260,7 @@ export async function createProviderConnection(data) {
     result = conn;
   });
 
+  invalidateConnectionsCache();
   return result;
 }
 
@@ -251,6 +278,7 @@ export async function updateProviderConnection(id, data) {
     if (data.priority !== undefined) reorderInTx(db, existing.provider);
     result = merged;
   });
+  invalidateConnectionsCache();
   return result;
 }
 
@@ -264,6 +292,7 @@ export async function deleteProviderConnection(id) {
     reorderInTx(db, row.provider);
     ok = true;
   });
+  invalidateConnectionsCache();
   return ok;
 }
 
@@ -271,12 +300,14 @@ export async function deleteProviderConnectionsByProvider(providerId) {
   const db = await getAdapter();
   const before = db.get(`SELECT COUNT(*) AS n FROM providerConnections WHERE provider = ?`, [providerId]);
   db.run(`DELETE FROM providerConnections WHERE provider = ?`, [providerId]);
+  invalidateConnectionsCache();
   return before?.n || 0;
 }
 
 export async function reorderProviderConnections(providerId) {
   const db = await getAdapter();
   db.transaction(() => reorderInTx(db, providerId));
+  invalidateConnectionsCache();
 }
 
 export async function cleanupProviderConnections() {
@@ -307,5 +338,6 @@ export async function cleanupProviderConnections() {
       if (dirty) upsert(db, conn);
     }
   });
+  if (cleaned > 0) invalidateConnectionsCache();
   return cleaned;
 }

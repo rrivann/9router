@@ -82,6 +82,36 @@ function CollapsibleSection({ title, children, defaultOpen = false, icon = null 
   );
 }
 
+// Server truncates request/response payloads at maxJsonSize (default 500 KB)
+// to keep the observability table bounded; the truncated field is replaced by
+// {_truncated, _originalSize, _preview}. Show a banner when we detect that
+// shape so users don't mistake a preview for the full payload.
+function TruncationBanner({ originalSize }) {
+  const kb = Math.round(originalSize / 1024);
+  return (
+    <div className="mb-2 flex items-start gap-2 rounded-md border border-amber-400/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200">
+      <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">info</span>
+      <span>
+        Payload truncated — original size <strong>{kb.toLocaleString()} KB</strong> exceeds the
+        observability cap. Only a 200-char preview is stored. Raise <code>observabilityMaxJsonSize</code>
+        {" "}in settings to keep the full body.
+      </span>
+    </div>
+  );
+}
+
+function PayloadPre({ value }) {
+  const isTrunc = value && typeof value === "object" && value._truncated === true;
+  return (
+    <>
+      {isTrunc && <TruncationBanner originalSize={value._originalSize || 0} />}
+      <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
+        {typeof value === "string" ? value : JSON.stringify(value, null, 2)}
+      </pre>
+    </>
+  );
+}
+
 function getCachedTokens(tokens) {
   // Standard 0penAI: cached_tokens; Claude: cache_read_input_tokens;
   // CodeBuddy: prompt_cache_hit_tokens (mirrors CodeBuddy's usage payload).
@@ -289,7 +319,7 @@ export default function RequestDetailsTab() {
 
       <Card padding="none">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px]">
+          <table className="w-full min-w-[800px]">
             <thead>
               <tr className="border-b border-black/5 dark:border-white/5">
                 <th className="text-left p-4 text-sm font-semibold text-text-main">Timestamp</th>
@@ -298,7 +328,6 @@ export default function RequestDetailsTab() {
                 <th className="text-right p-4 text-sm font-semibold text-text-main">Input Tokens</th>
                 <th className="text-right p-4 text-sm font-semibold text-text-main">Cached</th>
                 <th className="text-right p-4 text-sm font-semibold text-text-main">Cache %</th>
-                <th className="text-right p-4 text-sm font-semibold text-text-main">Cache Creation</th>
                 <th className="text-right p-4 text-sm font-semibold text-text-main">Output Tokens</th>
                 <th className="text-left p-4 text-sm font-semibold text-text-main">Latency</th>
                 <th className="text-center p-4 text-sm font-semibold text-text-main">Action</th>
@@ -307,7 +336,7 @@ export default function RequestDetailsTab() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="10" className="p-8 text-center text-text-muted">
+                  <td colSpan="9" className="p-8 text-center text-text-muted">
                     <div className="flex items-center justify-center gap-2">
                       <span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span>
                       Loading...
@@ -316,7 +345,7 @@ export default function RequestDetailsTab() {
                 </tr>
               ) : details.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="p-8 text-center text-text-muted">
+                  <td colSpan="9" className="p-8 text-center text-text-muted">
                     No request details found
                   </td>
                 </tr>
@@ -345,9 +374,6 @@ export default function RequestDetailsTab() {
                     </td>
                     <td className="p-4 text-right">
                       <CacheHitBadge tokens={detail.tokens} />
-                    </td>
-                    <td className="p-4 text-sm text-text-main text-right font-mono">
-                      {getCacheCreationTokens(detail.tokens) > 0 ? getCacheCreationTokens(detail.tokens).toLocaleString() : "—"}
                     </td>
                     <td className="p-4 text-sm text-text-main text-right font-mono">
                       {detail.tokens?.completion_tokens?.toLocaleString() || 0}
@@ -455,6 +481,14 @@ export default function RequestDetailsTab() {
                   {selectedDetail.tokens?.completion_tokens?.toLocaleString() || 0}
                 </span>
               </div>
+              {typeof selectedDetail.tokens?.credit === "number" && selectedDetail.tokens.credit > 0 && (
+                <div title="Credit debited by CodeBuddy for this request — direct pass-through, not our estimate">
+                  <span className="text-text-muted">Credit Used:</span>{" "}
+                  <span className="font-mono text-primary">
+                    {selectedDetail.tokens.credit.toFixed(2)}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-4">
@@ -495,27 +529,18 @@ export default function RequestDetailsTab() {
               )}
 
               <CollapsibleSection title="1. Client Request (Input)" defaultOpen={true} icon="input">
-                <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
-                  {JSON.stringify(selectedDetail.request, null, 2)}
-                </pre>
+                <PayloadPre value={selectedDetail.request} />
               </CollapsibleSection>
 
               {selectedDetail.providerRequest && (
                 <CollapsibleSection title="2. Provider Request (Translated)" icon="translate">
-                  <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
-                    {JSON.stringify(selectedDetail.providerRequest, null, 2)}
-                  </pre>
+                  <PayloadPre value={selectedDetail.providerRequest} />
                 </CollapsibleSection>
               )}
 
               {selectedDetail.providerResponse && (
                 <CollapsibleSection title="3. Provider Response (Raw)" icon="data_object">
-                  <pre className="max-h-[300px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
-                    {typeof selectedDetail.providerResponse === 'object'
-                      ? JSON.stringify(selectedDetail.providerResponse, null, 2)
-                      : selectedDetail.providerResponse
-                    }
-                  </pre>
+                  <PayloadPre value={selectedDetail.providerResponse} />
                 </CollapsibleSection>
               )}
               

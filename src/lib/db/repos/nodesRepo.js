@@ -2,6 +2,28 @@ import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 
+// TTL cache. getProviderNodes is fetched inside getUsageStats and per chat
+// request (batch getProviderNodes in the sse model resolver), so repeat calls
+// benefit from skipping the JSON parse per row.
+const CACHE_TTL_MS = 30_000;
+let cachedList = null;
+let cachedAt = 0;
+
+function invalidateNodesCache() {
+  cachedList = null;
+  cachedAt = 0;
+}
+
+async function getAllNodesCached() {
+  if (cachedList && (Date.now() - cachedAt) < CACHE_TTL_MS) return cachedList;
+  const db = await getAdapter();
+  cachedList = db.all(`SELECT * FROM providerNodes`).map(rowToNode);
+  cachedAt = Date.now();
+  return cachedList;
+}
+
+export { invalidateNodesCache };
+
 function rowToNode(row) {
   if (!row) return null;
   const extra = parseJson(row.data, {});
@@ -39,17 +61,14 @@ function upsert(db, n) {
 }
 
 export async function getProviderNodes(filter = {}) {
-  const db = await getAdapter();
-  const where = [];
-  const params = [];
-  if (filter.type) { where.push("type = ?"); params.push(filter.type); }
-  const sql = `SELECT * FROM providerNodes${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`;
-  return db.all(sql, params).map(rowToNode);
+  const all = await getAllNodesCached();
+  if (filter.type !== undefined) return all.filter((n) => n.type === filter.type);
+  return [...all];
 }
 
 export async function getProviderNodeById(id) {
-  const db = await getAdapter();
-  return rowToNode(db.get(`SELECT * FROM providerNodes WHERE id = ?`, [id]));
+  const all = await getAllNodesCached();
+  return all.find((n) => n.id === id) || null;
 }
 
 export async function createProviderNode(data) {
@@ -66,6 +85,7 @@ export async function createProviderNode(data) {
     updatedAt: now,
   };
   upsert(db, node);
+  invalidateNodesCache();
   return node;
 }
 
@@ -79,6 +99,7 @@ export async function updateProviderNode(id, data) {
     upsert(db, merged);
     result = merged;
   });
+  invalidateNodesCache();
   return result;
 }
 
@@ -91,5 +112,6 @@ export async function deleteProviderNode(id) {
     removed = rowToNode(row);
     db.run(`DELETE FROM providerNodes WHERE id = ?`, [id]);
   });
+  invalidateNodesCache();
   return removed;
 }

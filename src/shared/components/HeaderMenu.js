@@ -2,9 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
+import dynamic from "next/dynamic";
 import { useTheme } from "@/shared/hooks/useTheme";
-import ChangelogModal from "./ChangelogModal";
 import { ConfirmModal } from "./Modal";
+
+// Lazy-load: marked (~30kB) only ships once user opens the changelog dialog
+const ChangelogModal = dynamic(() => import("./ChangelogModal"), { ssr: false });
 
 function MenuItem({ icon, label, onClick, trailing, danger }) {
   return (

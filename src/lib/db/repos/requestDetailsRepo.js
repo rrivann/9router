@@ -4,7 +4,11 @@ import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 const DEFAULT_MAX_RECORDS = 200;
 const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_FLUSH_INTERVAL_MS = 5000;
-const DEFAULT_MAX_JSON_SIZE = 5 * 1024;
+// Raised from 5 KB to 500 KB so Claude-style requests with long tool-result
+// history stay inspectable in the Request Details modal. 200 rows × ~500 KB
+// caps the observability table at ~100 MB in the worst case; the trailing
+// maxRecords prune keeps it bounded.
+const DEFAULT_MAX_JSON_SIZE = 500 * 1024;
 const CONFIG_CACHE_TTL_MS = 5000;
 
 let cachedConfig = null;
@@ -24,7 +28,7 @@ async function getObservabilityConfig() {
       maxRecords: settings.observabilityMaxRecords || parseInt(process.env.OBSERVABILITY_MAX_RECORDS || String(DEFAULT_MAX_RECORDS), 10),
       batchSize: settings.observabilityBatchSize || parseInt(process.env.OBSERVABILITY_BATCH_SIZE || String(DEFAULT_BATCH_SIZE), 10),
       flushIntervalMs: settings.observabilityFlushIntervalMs || parseInt(process.env.OBSERVABILITY_FLUSH_INTERVAL_MS || String(DEFAULT_FLUSH_INTERVAL_MS), 10),
-      maxJsonSize: (settings.observabilityMaxJsonSize || parseInt(process.env.OBSERVABILITY_MAX_JSON_SIZE || "5", 10)) * 1024,
+      maxJsonSize: (settings.observabilityMaxJsonSize || parseInt(process.env.OBSERVABILITY_MAX_JSON_SIZE || "500", 10)) * 1024,
     };
   } catch {
     cachedConfig = {
@@ -42,6 +46,13 @@ async function getObservabilityConfig() {
 let writeBuffer = [];
 let flushTimer = null;
 let isFlushing = false;
+
+// Bound the write buffer so a wedged DB writer (disk full, lock held) can't
+// grow it to OOM. Once we hit the cap we drop the oldest queued entries — the
+// newest samples are usually more relevant than a stale backlog anyway.
+const MAX_WRITE_BUFFER = 500;
+let overflowDroppedCount = 0;
+let lastOverflowWarnAt = 0;
 
 function sanitizeHeaders(headers) {
   if (!headers || typeof headers !== "object") return {};
@@ -130,6 +141,21 @@ export async function saveRequestDetail(detail) {
   if (!config.enabled) return;
 
   writeBuffer.push(detail);
+
+  // Overflow guard: if flushToDatabase is stuck (e.g. DB locked or disk full),
+  // drop the oldest entries so the buffer can't grow without bound. Log at most
+  // once per minute so we don't spam under sustained pressure.
+  if (writeBuffer.length > MAX_WRITE_BUFFER) {
+    const drop = writeBuffer.length - MAX_WRITE_BUFFER;
+    writeBuffer.splice(0, drop);
+    overflowDroppedCount += drop;
+    const now = Date.now();
+    if (now - lastOverflowWarnAt > 60_000) {
+      console.warn(`[requestDetailsRepo] write buffer capped at ${MAX_WRITE_BUFFER}; dropped ${overflowDroppedCount} oldest entries (DB slow?)`);
+      lastOverflowWarnAt = now;
+      overflowDroppedCount = 0;
+    }
+  }
 
   // Trigger immediate flush if batch threshold reached.
   // flushToDatabase() drains entire buffer in a loop, so all pushes during await are persisted.
