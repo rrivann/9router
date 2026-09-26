@@ -89,6 +89,13 @@ export function formatDoneLine({ usage, latency }) {
     const parts = [];
     if (cacheRead) parts.push(`↻${cacheRead}`);
     if (cacheCreate) parts.push(`+${cacheCreate}`);
+    // Hit ratio: cache-read as % of prompt (excludes cache_creation which is
+    // billed at write rate). Only shown when there's a meaningful prompt to
+    // compare against, so single-token pings don't display "100%".
+    if (cacheRead > 0 && inTok > 0) {
+      const pct = Math.round((cacheRead / inTok) * 100);
+      parts.push(`= ${pct}%`);
+    }
     inStr += ` (CACHE ${parts.join(" ")})`;
   }
   const ttftStr = latency?.ttft ? ` · TTFT ${latency.ttft}ms` : "";

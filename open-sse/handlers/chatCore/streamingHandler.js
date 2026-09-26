@@ -9,6 +9,7 @@ import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLin
 import { saveRequestDetail } from "@/lib/usageDb.js";
 import { SSE_HEADERS_CORS as SSE_HEADERS } from "../../utils/sseConstants.js";
 import { emitCodebuddyReport } from "../../services/codebuddyReport.js";
+import { canonicalizeUsage } from "../../utils/usageTracking.js";
 
 // Responses-API providers emit Responses SSE → which client format to translate INTO, by request sourceFormat.
 const CODEX_SOURCE_TO_TARGET = {
@@ -133,10 +134,15 @@ export function buildOnStreamComplete({ provider, model, connectionId, apiKey, r
     const safeContent = contentObj?.content || "[Empty streaming response]";
     const safeThinking = contentObj?.thinking || null;
 
+    // Claude→0penAI translate leaves usage in Claude-shape (input_tokens /
+    // output_tokens). Dashboard rows read completion_tokens, so canonicalize
+    // to 0penAI-shape before persisting or the Output column reads 0.
+    const canonicalUsage = canonicalizeUsage(usage) || { prompt_tokens: 0, completion_tokens: 0 };
+
     saveRequestDetail(buildRequestDetail({
       provider, model, connectionId,
       latency,
-      tokens: usage || { prompt_tokens: 0, completion_tokens: 0 },
+      tokens: canonicalUsage,
       request: extractRequestConfig(body, stream),
       providerRequest: finalBody || translatedBody || null,
       providerResponse: safeContent,

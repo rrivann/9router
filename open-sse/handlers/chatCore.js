@@ -18,6 +18,7 @@ import { handleForcedSSEToJson } from "./chatCore/sseToJsonHandler.js";
 import { handleNonStreamingResponse } from "./chatCore/nonStreamingHandler.js";
 import { handleStreamingResponse, buildOnStreamComplete } from "./chatCore/streamingHandler.js";
 import { detectClientTool, isNativePassthrough } from "../utils/clientDetector.js";
+import { resolveRealm } from "../providers/realmResolver.js";
 import { dedupeTools } from "../utils/toolDeduper.js";
 import { compressMessages, formatRtkLog } from "../rtk/index.js";
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
@@ -159,6 +160,9 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     if (toolN) parts.push(`${toolN} TOOL`);
     if (think) parts.push(`THINK:${think}`);
     parts.push(`ACC:${acc}`);
+    if (provider === "codebuddy") {
+      parts.push(`REALM:${resolveRealm(credentials)}`);
+    }
     log.line(reqTag, "▶", parts.join(" · "));
   }
 
