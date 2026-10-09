@@ -9,8 +9,19 @@ import {
 } from "../services/auth.js";
 import { cacheClaudeHeaders } from "open-sse/utils/claudeHeaderCache.js";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
-import { getSettings, updateProviderConnection, deleteProviderConnection } from "@/lib/localDb";
-import { classifyCodebuddyError, CB_ERROR } from "open-sse/services/codebuddyErrors.js";
+import { getSettings, updateProviderConnection, deleteProviderConnection, getProviderConnections } from "@/lib/localDb";
+import { classifyCodebuddyError, CB_ERROR, parseFrequencyResetMs } from "open-sse/services/codebuddyErrors.js";
+
+// Connection-level disable reasons surfaced in the dashboard. A connection
+// carrying BANNED_REASON is considered unrecoverable and is skipped by the
+// auto-revive sweep below.
+const CB_BANNED_REASON = "Banned (request illegal)";
+const CB_DISABLE_REASON = {
+  [CB_ERROR.BANNED]: CB_BANNED_REASON,
+  [CB_ERROR.CREDITS_EXHAUSTED]: "Credits exhausted",
+  [CB_ERROR.TRIAL_NOT_ACTIVATED]: "Trial version not yet activated",
+  [CB_ERROR.FREQUENCY_LIMITED]: "Usage frequency limit reached",
+};
 
 // Handle upstream 403 "Access denied" (IP/anti-abuse — refresh doesn't help).
 // Default action: DELETE the connection permanently after N occurrences.
@@ -184,6 +195,27 @@ export async function handleChat(request, clientRawRequest = null) {
 }
 
 /**
+ * Re-enable every codebuddy connection that is disabled but not permanently
+ * banned, when the whole pool has run dry. Returns true when at least one
+ * connection was revived so the caller can retry the selection loop.
+ */
+async function reviveCodebuddyPool() {
+  const all = await getProviderConnections({ provider: "codebuddy" });
+  if (all.length === 0 || all.some((c) => (c.isActive ?? true) === true)) return false;
+
+  const revivable = all.filter((c) => (c.lastError || "") !== CB_BANNED_REASON);
+  if (revivable.length === 0) return false;
+
+  for (const c of revivable) {
+    try {
+      await updateProviderConnection(c.id, { isActive: true, testStatus: "active" });
+    } catch (e) { log.warn("AUTH", `revive ${c.id?.slice(0, 8)} failed: ${e.message}`); }
+  }
+  log.warn("AUTH", `codebuddy pool auto-revived (${revivable.length}/${all.length} connections)`);
+  return true;
+}
+
+/**
  * Handle single model chat request
  */
 async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null) {
@@ -246,6 +278,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;
+  let reviveAttempted = false;
 
   // Internal test probe: force a specific account when the dashboard "test model
   // with selected account" flow passes X-9Router-Test-Connection. Preferred once;
@@ -265,6 +298,19 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);
       }
       if (excludeConnectionIds.size === 0) {
+        // Auto-revive: when every connection for this provider has been disabled
+        // (e.g. a full-pool frequency-limit sweep), nothing can ever succeed and
+        // the provider stays dark until a manual dashboard toggle. Re-enable the
+        // pool once per request so the next round re-rolls: limits usually came
+        // back by the time the whole pool ran dry. Banned connections are left
+        // disabled — that state is unrecoverable by design.
+        if (provider === "codebuddy" && !reviveAttempted) {
+          reviveAttempted = true;
+          if (await reviveCodebuddyPool()) {
+            log.warn("AUTH", `[${provider}] all connections disabled — auto-revived pool, retrying`);
+            continue;
+          }
+        }
         log.warn("AUTH", `No active credentials for provider: ${provider}`);
         return errorResponse(HTTP_STATUS.NOT_FOUND, `No active credentials for provider: ${provider}`);
       }
@@ -333,20 +379,17 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     // (open-sse/services/codebuddyErrors.js) — replaces earlier inline
     // substring checks so both realms and JSON-shape variants match uniformly.
     const cbKind = classifyCodebuddyError(result.status, result.error);
-    const CB_DISABLE_REASON = {
-      [CB_ERROR.BANNED]: "Banned (request illegal)",
-      [CB_ERROR.CREDITS_EXHAUSTED]: "Credits exhausted",
-      [CB_ERROR.TRIAL_NOT_ACTIVATED]: "Trial version not yet activated",
-    };
     if (CB_DISABLE_REASON[cbKind]) {
+      const resetMs = cbKind === CB_ERROR.FREQUENCY_LIMITED ? parseFrequencyResetMs(result.error) : null;
+      const until = resetMs ? ` (until ${new Date(resetMs).toISOString()})` : "";
       try {
         await updateProviderConnection(credentials.connectionId, {
           isActive: false,
           testStatus: "error",
-          lastError: CB_DISABLE_REASON[cbKind],
+          lastError: `${CB_DISABLE_REASON[cbKind]}${until}`,
           lastErrorAt: new Date().toISOString(),
         });
-        log.warn("AUTH", `Account ${credentials.connectionName} auto-disabled (${CB_DISABLE_REASON[cbKind].toLowerCase()})`);
+        log.warn("AUTH", `Account ${credentials.connectionName} auto-disabled (${CB_DISABLE_REASON[cbKind].toLowerCase()})${until}`);
       } catch (e) { log.warn("AUTH", `auto-disable (${cbKind}) failed: ${e.message}`); }
     }
 
