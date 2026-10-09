@@ -1,4 +1,13 @@
-# v0.5.67 (2026-09-16)
+# v0.5.72 (2026-10-09)
+
+## Fixes
+- **CodeBuddy 6004 "usage exceeds frequency limit"**: the realm's per-model quota 429 was unclassified. ERROR_RULES had no text match and the body uses `msg` instead of `message`, so the generic 429-backoff path ran: account stayed `isActive: true` and was re-tried every 2s→5min cap for the whole limit window (often 12h+). Classifier now recognizes code 6004 as `FREQUENCY_LIMITED`, the connection is auto-disabled with the reset time in `lastError`, and traffic rotates to the next account. `readBodyCode` also reads the `msg` field so text-fallback matching works for this shape.
+
+## Features
+- **CodeBuddy pool auto-revive**: when every codebuddy connection has been disabled (full-pool frequency-limit sweep, exhausted credits, etc.), the next request re-enables the pool once and retries the selection loop. Banned connections (403 11140) are left disabled — that state is unrecoverable by design. Avoids the provider going dark until a manual dashboard toggle.
+
+# v0.5.71 (2026-10-09)
+
 
 ## Notes
 - Republish of v0.5.66 fixes. v0.5.66 got staged on npm without completing (auth token missed publish scope); bumped past it.
