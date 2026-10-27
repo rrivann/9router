@@ -51,7 +51,7 @@ const PATTERN_THINKING = [
   // kimi-k3-1 / minimax-m3) fall through to the openai format default.
   { provider: "codebuddy-cn", pattern: "glm-5.3*",     levels: ["low", "high", "max"] },
   { provider: "codebuddy-cn", pattern: "glm-5.2",      levels: ["high", "xhigh"] },
-  { provider: "codebuddy-cn", pattern: "deepseek-v4*", levels: ["low", "high", "xhigh"] },
+  { provider: "codebuddy-cn", pattern: "deepseek-v4*", levels: ["low", "high", "xhigh", "max"] },
   { provider: "codebuddy-cn", pattern: "hy3*",         levels: ["low", "high"] },
   { provider: "codebuddy-cn", pattern: "hy4*",         levels: ["high"] },
 ];
