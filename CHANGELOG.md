@@ -1,3 +1,9 @@
+# v0.5.74 (2026-10-27)
+
+## Chores
+- **Next.js 16.4.0 → 16.4.3** (security advisory). Also unblocks releases: under 16.4.0 every `next build` was gated by a one-shot `SecurityFatalError` receipt, so `prepublishOnly` could never complete twice and publishing required `--ignore-scripts`. Builds now run clean and repeatedly.
+- No functional change — 0.5.73's fixes are identical; this release only ships the upgraded runtime.
+
 # v0.5.73 (2026-10-27)
 
 ## Features
