@@ -7,7 +7,7 @@ import { getCodeBuddyCnUsage } from "./usage/codebuddy-cn.js";
 import { getCodeBuddyUsage } from "./usage/codebuddy.js";
 
 const USAGE_HANDLERS = {
-  "codebuddy-cn": (c) => getCodeBuddyCnUsage(c.accessToken, c.apiKey, c.providerSpecificData, c.proxyOptions),
+  "codebuddy-cn": (c) => getCodeBuddyCnUsage(c.accessToken, c.apiKey, c.providerSpecificData, c.proxyOptions, c.id),
   codebuddy: (c) => getCodeBuddyUsage(c.accessToken, c.providerSpecificData, c.proxyOptions, c.apiKey),
 };
 
