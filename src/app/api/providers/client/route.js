@@ -89,9 +89,17 @@ export async function GET(request) {
 
     const allConnections = await getProviderConnections();
     const eligibleConnections = allConnections.filter(isUsageEligible);
-    const providerOptions = Array.from(new Set(eligibleConnections.map((conn) => conn.provider))).sort();
 
-    const providerFilteredConnections = eligibleConnections.filter((conn) => (
+    // A provider counts as disabled when every one of its connections is
+    // turned off (same rule as the Providers page). Hide its accounts from the
+    // quota tracker entirely — an off provider has no quota worth tracking.
+    const activeProviders = new Set(
+      eligibleConnections.filter((conn) => conn.isActive ?? true).map((conn) => conn.provider)
+    );
+    const trackableConnections = eligibleConnections.filter((conn) => activeProviders.has(conn.provider));
+    const providerOptions = Array.from(new Set(trackableConnections.map((conn) => conn.provider))).sort();
+
+    const providerFilteredConnections = trackableConnections.filter((conn) => (
       provider === "all" || conn.provider === provider
     ));
 
@@ -119,7 +127,9 @@ export async function GET(request) {
         totalPages,
       },
       totals: {
-        eligibleConnections: eligibleConnections.length,
+        // Count trackable connections only: a fully-disabled provider is
+        // hidden from the UI, so it must not keep the "connected" state alive.
+        eligibleConnections: trackableConnections.length,
         providerFilteredConnections: providerFilteredConnections.length,
       },
     });
