@@ -1,3 +1,12 @@
+# v0.5.73 (2026-10-27)
+
+## Features
+- **CodeBuddy CN quota tracker restored (Bearer + hourly cache)**: the tracker was disabled in `dbf76c58` over billing-endpoint fingerprint risk, not because the API broke. Re-probing with the same Bearer CLI credential the chat path already uses returns 200 and the full payload — no web cookie or browser UA needed. The reference implementation in `~/Documents/Github/codebuddy-cn` authenticates with browser session cookies, `Origin`/`Referer` and a Chrome UA; that profile is *more* detectable on an account whose other traffic is CLI, so none of it was adopted. Its "Bearer gets 403" note applies to the web domains, not `copilot.tencent.com`. Risk is bounded by a server-side TTL cache: **one billing call per connection per hour**, shared by every dashboard refresh (the quota page polls every 60s while visible — uncached that would be ~1440 calls/day/account).
+
+## Fixes
+- **Disabled providers no longer appear in the Quota Tracker**: a provider whose every connection is turned off reads as "Disabled" on the Providers page but still filled the Quota Tracker (280 dead CN rows, 646 qwencloud rows). Provider-level rule now mirrors `providers/page.js`: all connections inactive ⇒ provider hidden from the table, the provider dropdown, and `totals.eligibleConnections`. Providers with at least one active connection still list their off accounts, so the "Turned off" filter keeps working.
+- **`THINK:max` for codebuddy-cn `deepseek-v4*`**: `PATTERN_THINKING` capped all three at `xhigh` while the registry declares `low→max (5 level)`. Live probes confirmed upstream honors `max` — reasoning_tokens hit the `max_tokens` ceiling at `max` (2500/2500/8000) but stopped well below at `xhigh` (1542/1854/5675), twice per model.
+
 # v0.5.72 (2026-10-09)
 
 ## Fixes
