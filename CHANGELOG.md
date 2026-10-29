@@ -1,3 +1,8 @@
+# v0.5.76 (2026-10-29)
+
+## Changes
+- **CodeBuddy CN quota tracker disabled**: both `usage` flags are off again, so CN drops out of `USAGE_SUPPORTED_PROVIDERS` and the Tencent billing endpoint is never called. The Bearer + hourly-cache implementation stays in `open-sse/services/usage/codebuddy-cn.js`; re-enabling is a two-line change in the registry.
+
 # v0.5.75 (2026-10-29)
 
 ## Fixes
