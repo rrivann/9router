@@ -83,8 +83,10 @@ export default {
     pollInterval: 5000,
   },
   features: {
-    // Bearer-only billing read, cached server-side (see usage/codebuddy-cn.js).
-    usage: true,
-    usageApikey: true,
+    // Disabled on request (2026-10-29). Implementation is kept in
+    // usage/codebuddy-cn.js — flip both flags back to true to re-enable.
+    // Previously: Bearer-only billing read, cached server-side.
+    usage: false,
+    usageApikey: false,
   },
 };
