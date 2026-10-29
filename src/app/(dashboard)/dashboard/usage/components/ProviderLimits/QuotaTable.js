@@ -93,6 +93,15 @@ export default function QuotaTable({
 }) {
   const [page, setPage] = useState(1);
 
+  // The parent rebuilds the quotas array on every render (auto-refresh ticks,
+  // visibility filtering), so depending on the `quotas` reference reset the
+  // page on each tick and "Next" bounced straight back to page 1. Key the reset
+  // on the actual row identity instead.
+  const quotaSignature = useMemo(
+    () => quotas.map((quota) => quota.name ?? quota.label ?? "").join("\u0000"),
+    [quotas],
+  );
+
   const normalizedQuotas = useMemo(
     () => quotas.map((quota, index) => ({
       ...quota,
@@ -111,7 +120,7 @@ export default function QuotaTable({
 
   useEffect(() => {
     setPage(1);
-  }, [sortMode, quotas]);
+  }, [sortMode, quotaSignature]);
 
   useEffect(() => {
     setPage((currentPage) => Math.min(currentPage, totalPages));
