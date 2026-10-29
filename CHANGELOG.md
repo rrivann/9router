@@ -1,3 +1,8 @@
+# v0.5.75 (2026-10-29)
+
+## Fixes
+- **Quota Tracker pagination resetting to page 1**: `QuotaTable` reset its page whenever the `quotas` prop changed identity. The prop comes from `filterQuotasByVisibility(...)`, which rebuilds the array on every parent render once any row is hidden — so each 60s auto-refresh tick (and any parent state update) threw the user back to page 1. Reset is now keyed on row identity (quota names), so it only fires when the row set genuinely changes. Reported on a CodeBuddy-CN card with 79 quotas and one hidden row.
+
 # v0.5.74 (2026-10-27)
 
 ## Chores
