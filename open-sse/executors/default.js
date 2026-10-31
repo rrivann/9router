@@ -1,8 +1,28 @@
+import { AsyncLocalStorage } from "async_hooks";
 import { BaseExecutor } from "./base.js";
 import { PROVIDERS } from "../config/providers.js";
 import { ANTHROPIC_API_VERSION, OPENAI_COMPAT_BASE, ANTHROPIC_COMPAT_BASE } from "../providers/shared.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { stripUnsupportedParams } from "../translator/concerns/paramSupport.js";
+import { createContentFilterCache, applyFiltersToMessages } from "../utils/contentFilters.js";
+
+// Per-request state. Executors are singletons shared across concurrent
+// requests, so per-request filter results must not live on the instance
+// (same rationale as executors/codebuddy.js).
+const requestState = new AsyncLocalStorage();
+const filterCaches = new Map();
+
+// Content filters are keyed by the settings provider id, and DefaultExecutor
+// serves arbitrary custom nodes — one cache per provider.
+function getContentFilterCache(provider) {
+  if (!filterCaches.has(provider)) filterCaches.set(provider, createContentFilterCache(provider));
+  return filterCaches.get(provider);
+}
+
+/** Drop every cached rule set so edited filters apply to the next request. */
+export function invalidateContentFiltersCache() {
+  for (const cache of filterCaches.values()) cache.invalidate();
+}
 
 // Auth header descriptors — derived from registry transport.auth, fallback to hardcoded defaults.
 const BEARER = { combined: true, header: "Authorization", scheme: "bearer" };
@@ -47,6 +67,19 @@ export class DefaultExecutor extends BaseExecutor {
     super(provider, PROVIDERS[provider] || FALLBACK_TRANSPORT);
   }
 
+  async execute(params) {
+    // Only custom compatible nodes are user-configurable here; registry
+    // providers that reach DefaultExecutor have no filters set.
+    const provider = this.provider;
+    const cache = getContentFilterCache(provider);
+    const state = { contentFilters: await cache.load(), filtersApplied: null };
+    return requestState.run(state, async () => {
+      const result = await super.execute(params);
+      if (state.filtersApplied) result.filtersApplied = state.filtersApplied;
+      return result;
+    });
+  }
+
   transformRequest(model, body) {
     // applyJsonSchemaFallback returns the same `body` ref for the non-matching
     // path. Clone before any in-place mutation (dropClientMetadata / strip)
@@ -61,6 +94,16 @@ export class DefaultExecutor extends BaseExecutor {
         delete transformed.client_metadata;
       }
       stripUnsupportedParams(this.provider, model, transformed);
+
+      // Content filters: per-provider pattern/replacement rules applied to the
+      // outgoing message text (same engine the CodeBuddy executors use).
+      const state = requestState.getStore();
+      const rules = state?.contentFilters || [];
+      if (rules.length > 0 && Array.isArray(transformed.messages)) {
+        const result = applyFiltersToMessages(transformed.messages, rules);
+        transformed.messages = result.messages;
+        if (result.applied.length > 0 && state) state.filtersApplied = result.applied;
+      }
     }
 
     return injectReasoningContent({ provider: this.provider, model, body: transformed });
