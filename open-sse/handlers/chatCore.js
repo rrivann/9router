@@ -27,6 +27,21 @@ import { extractThinking } from "../translator/concerns/thinkingUnified.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 
 /**
+ * User-facing provider/model label for logs.
+ * Custom compatible nodes carry opaque ids (`openai-compatible-chat-<uuid>`);
+ * the node prefix the user configured (e.g. "ali") is the meaningful handle.
+ */
+function formatProviderModel(provider, model, credentials) {
+  const isCompatible = provider?.startsWith?.("openai-compatible-")
+    || provider?.startsWith?.("anthropic-compatible-");
+  const prefix = credentials?.providerSpecificData?.prefix;
+  if (!isCompatible || !prefix) return `${provider}/${model}`;
+
+  const modelStr = String(model ?? "");
+  return modelStr.startsWith(`${prefix}/`) ? modelStr : `${prefix}/${modelStr}`;
+}
+
+/**
  * Core chat handler - shared between SSE and Worker
  * @param {object} options.body - Request body
  * @param {object} options.modelInfo - { provider, model }
@@ -144,7 +159,12 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   // Request line: one correlated summary (fmt + thinking + counts + account)
   if (log?.line) {
-    const clientModel = clientRawRequest?.body?.model || `${provider}/${model}`;
+    const resolvedLabel = formatProviderModel(provider, model, credentials);
+    const clientModelRaw = clientRawRequest?.body?.model || resolvedLabel;
+    const clientModel = clientModelRaw.startsWith(`${provider}/`)
+      ? formatProviderModel(provider, clientModelRaw.slice(provider.length + 1), credentials)
+      : clientModelRaw;
+    const routeLabel = clientModel === resolvedLabel ? resolvedLabel : `${clientModel} → ${resolvedLabel}`;
     const msgN = translatedBody.messages?.length || translatedBody.input?.length || translatedBody.contents?.length || body.messages?.length || body.input?.length || 0;
     const toolN = translatedBody.tools?.length || body.tools?.length || 0;
     const fmtStr = passthrough ? `FMT: ${sourceFormat} (passthrough)` : `FMT: ${sourceFormat}→${targetFormat}`;
@@ -152,7 +172,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     const think = showThinking ? log.fmtThink?.(extractThinking(translatedBody)) : null;
     const acc = credentials?.connectionName || credentials?.connectionId?.slice(0, 8) || "-";
     const parts = [
-      `POST ${clientModel} → ${provider}/${model}`,
+      `POST ${routeLabel}`,
       fmtStr,
       stream ? "STREAM" : "JSON",
       `${msgN} MSG`,
@@ -282,7 +302,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
           attempt += 1;
           const delayMs = terminatedBaseDelayMs * attempt; // linear backoff: 500, 1000, 1500ms
           if (log?.line) {
-            log.line(reqTag, "↻", `RETRY terminated · ${provider}/${model} · attempt=${attempt}/${terminatedMaxRetries} · wait=${delayMs}ms · reason=${execError.message || execError.code || "socket-drop"}`);
+            log.line(reqTag, "↻", `RETRY terminated · ${formatProviderModel(provider, model, credentials)} · attempt=${attempt}/${terminatedMaxRetries} · wait=${delayMs}ms · reason=${execError.message || execError.code || "socket-drop"}`);
           }
           await new Promise((r) => setTimeout(r, delayMs));
           continue;
@@ -310,7 +330,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     }
     const errMsg = formatProviderError(error, provider, model, HTTP_STATUS.BAD_GATEWAY);
     if (log?.errorLine) {
-      log.errorLine(reqTag, "✗", `ERROR 502 · ${provider}/${model} · ${Date.now() - requestStartTime}ms\n    ${errMsg}${error.stack ? `\n    ${error.stack}` : ""}`);
+      log.errorLine(reqTag, "✗", `ERROR 502 · ${formatProviderModel(provider, model, credentials)} · ${Date.now() - requestStartTime}ms\n    ${errMsg}${error.stack ? `\n    ${error.stack}` : ""}`);
     }
     return createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg);
   }
@@ -331,7 +351,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
         return result;
       }, 3, log);
       if (newCredentials?.accessToken || newCredentials?.copilotToken) {
-        if (log?.line) log.line(reqTag, "🔑", `TOKEN REFRESHED · ${provider}/${model}`);
+        if (log?.line) log.line(reqTag, "🔑", `TOKEN REFRESHED · ${formatProviderModel(provider, model, credentials)}`);
         Object.assign(credentials, newCredentials);
         if (onCredentialsRefreshed) {
           try { await onCredentialsRefreshed(newCredentials); } catch (e) { log?.warn?.("TOKEN", `onCredentialsRefreshed failed: ${e.message}`); }
@@ -371,7 +391,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     const errMsg = formatProviderError(new Error(message), provider, model, statusCode);
     if (log?.errorLine) {
       const urlStr = providerUrl ? `\n    URL: ${providerUrl}` : "";
-      log.errorLine(reqTag, "✗", `ERROR ${statusCode} · ${provider}/${model} · ${Date.now() - requestStartTime}ms${urlStr}\n    ${errMsg}`);
+      log.errorLine(reqTag, "✗", `ERROR ${statusCode} · ${formatProviderModel(provider, model, credentials)} · ${Date.now() - requestStartTime}ms${urlStr}\n    ${errMsg}`);
     }
     reqLogger.logError(new Error(message), finalBody || translatedBody);
     return createErrorResult(statusCode, errMsg, resetsAtMs);
