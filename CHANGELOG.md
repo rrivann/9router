@@ -1,3 +1,9 @@
+# v0.5.77 (2026-10-31)
+
+## Fixes
+- **Custom OpenAI/Anthropic-compatible providers were unusable past creation**: three CodeBuddy-only gates rejected their opaque provider IDs before any network call — the connection Test (`Provider … not supported in this build`), Import from `/models` (`Provider … is not supported`), and the Add API Key validation (`Provider validation not supported`). All three now probe the node's own `baseUrl` with the stored credential instead.
+- **Compatible providers in logs**: request lines used the opaque id (`openai-compatible-chat-<uuid>/…`) on both sides of the arrow. They now use the node prefix and collapse the arrow when identical: `POST inf/ali/deepseek-v4.1-flash`. RETRY / ERROR / TOKEN REFRESHED lines follow the same format.
+
 # v0.5.76 (2026-10-29)
 
 ## Changes
