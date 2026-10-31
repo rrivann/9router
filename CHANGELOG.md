@@ -1,3 +1,8 @@
+# v0.5.78 (2026-10-31)
+
+## Features
+- **Content Filters for custom compatible providers**: the filter engine was only wired through the CodeBuddy executors, and the dashboard section was hard-gated to `codebuddy` / `codebuddy-cn`. `DefaultExecutor` (which serves every `openai-compatible-*` and `anthropic-compatible-*` node) now loads the provider's rule set on `execute()` and rewrites message text in `transformRequest()`, reusing the same engine and the `AsyncLocalStorage` pattern the CodeBuddy executors use — one cache per provider id. The provider detail page shows the Content Filters block for compatible nodes, and `PATCH /api/settings` invalidates the cache so edits apply without a restart. String content, content-part arrays, `null` content and tool results are rewritten; images pass through untouched.
+
 # v0.5.77 (2026-10-31)
 
 ## Fixes
