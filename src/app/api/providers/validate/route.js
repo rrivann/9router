@@ -2,6 +2,32 @@ import { NextResponse } from "next/server";
 import { getDefaultModel } from "open-sse/config/providerModels.js";
 import { PROVIDERS } from "open-sse/config/providers.js";
 import { normalizeProviderId } from "@/lib/providerNormalization";
+import { getProviderNodeById } from "@/models";
+import { isOpenAICompatibleProvider, isAnthropicCompatibleProvider } from "@/shared/constants/providers";
+
+// Custom nodes have no registry entry; probe the node's own /models endpoint.
+async function validateCompatibleProvider(provider, apiKey) {
+  const node = await getProviderNodeById(provider);
+  if (!node?.baseUrl) {
+    return { valid: false, error: "Compatible provider node not found" };
+  }
+
+  const baseUrl = String(node.baseUrl).trim().replace(/\/$/, "");
+  const headers = isAnthropicCompatibleProvider(provider)
+    ? { "x-api-key": apiKey, "anthropic-version": "2023-06-01", Authorization: `Bearer ${apiKey}` }
+    : { Authorization: `Bearer ${apiKey}` };
+
+  try {
+    const res = await fetch(`${baseUrl}/models`, { headers, signal: AbortSignal.timeout(8000) });
+    if (res.ok) return { valid: true, error: null };
+    if (res.status === 401 || res.status === 403) {
+      return { valid: false, error: "API key unauthorized" };
+    }
+    return { valid: false, error: `/models endpoint returned ${res.status}` };
+  } catch (err) {
+    return { valid: false, error: err.name === "TimeoutError" ? "Request timeout (>8s)" : err.message };
+  }
+}
 
 // POST /api/providers/validate - Validate API key with provider.
 // Generic 0penAI-compatible probe: hit /models first, fall back to a minimal chat completion.
@@ -13,6 +39,10 @@ export async function POST(request) {
 
     if (!provider || !apiKey) {
       return NextResponse.json({ error: "Provider and API key required" }, { status: 400 });
+    }
+
+    if (isOpenAICompatibleProvider(provider) || isAnthropicCompatibleProvider(provider)) {
+      return NextResponse.json(await validateCompatibleProvider(provider, apiKey));
     }
 
     const cfg = PROVIDERS[provider];
