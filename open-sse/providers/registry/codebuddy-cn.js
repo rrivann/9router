@@ -62,6 +62,7 @@ export default {
 
     // ── Kimi (Moonshot) ─────────────────────────────────────────────
     { id: "kimi-k3", name: "Kimi-K3", ownedBy: "moonshot", maxInputTokens: 1000000, maxOutputTokens: 262144, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
+    { id: "kimi-k3.1-pro", name: "Kimi-K3.1-Pro", ownedBy: "moonshot", maxInputTokens: 1000000, maxOutputTokens: 262144, thinking: true, effort: "low→high→max", images: true, toolCalls: true },
     { id: "kimi-k2.7", name: "Kimi-K2.7-Code", ownedBy: "moonshot", maxInputTokens: 262144, maxOutputTokens: 32000, thinking: true, images: true, toolCalls: true },
     { id: "kimi-k2.6", name: "Kimi-K2.6", ownedBy: "moonshot", maxInputTokens: 262144, maxOutputTokens: 32000, thinking: true, effort: "low→max (5 level)", images: true, toolCalls: true },
 
