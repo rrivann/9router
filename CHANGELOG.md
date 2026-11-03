@@ -1,3 +1,8 @@
+# v0.5.79 (2026-11-03)
+
+## Features
+- **CodeBuddy CN: `kimi-k3.1-pro`**: vision, reasoning (low/high/max), 1M context, 262K max output. Registry entry mirrors `kimi-k3`; capabilities live in the `codebuddy-cn` block; thinking levels pinned via `PATTERN_THINKING`; pricing covered by the existing `kimi-*` pattern.
+
 # v0.5.78 (2026-10-31)
 
 ## Features
